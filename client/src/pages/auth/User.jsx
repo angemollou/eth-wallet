@@ -33,6 +33,8 @@ export default function User() {
             <h4>{user?.first_name}</h4>
             <h4>{user?.last_name}</h4>
             <h4>{user?.is_staff}</h4>
+            <h4>{user?.wallet_address_eth}</h4>
+            <h4>{user?.balance_eth}</h4>
             <button disabled={loading} type='button' onClick={onLogout}>Logout</button>
         </div>
     )

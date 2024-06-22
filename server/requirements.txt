@@ -9,3 +9,4 @@ pytz==2023.3
 sqlparse==0.4.4
 Pillow==10.3.0
 setuptools==70.0.0
+requests=2.32.3
