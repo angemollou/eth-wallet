@@ -197,7 +197,7 @@ AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
     "BASE_DIR": BASE_DIR.joinpath(".ethnode"),
-    "EXECUTION": {"HTTP": 8545, "TCP": 30303},
+    "GATEWAY": {"HTTP": 8545, "TCP": 30303},
     "CONCENSUS": {
         "HTTP": 8550,
         "CHAIN_ID": 1,

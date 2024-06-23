@@ -6,10 +6,23 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 BASE_DIR = settings.ETH_NODE["BASE_DIR"]
+CHAIN_ID = str(
+    11155111  # Sepolia testnet
+    if settings.DEBUG
+    else settings.ETH_NODE["CONCENSUS"]["CHAIN_ID"]
+)
+
+
+def touch(path):
+    os.makedirs(os.path.dirname(path))
+    open(path, "a").close()
 
 
 class Command(BaseCommand):
     help = "Run a Geth Ethereum node via docker"
+
+    gateway_ps = None
+    consensus_ps = None
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -29,83 +42,203 @@ class Command(BaseCommand):
             "-d", "--detach", action="store_true", help="Run containers in background?"
         )  # on/off flag
         parser.add_argument(
-            "-c", "--clean", action="store_true", help="Clean volumes?"
+            "-r", "--reset", action="store_true", help="Clean volumes?"
         )  # on/off flag
 
     def handle(self, *args, **options):
-        status = 0
         try:
-            if options["clean"]:
+            if options["reset"]:
                 shutil.rmtree(BASE_DIR, ignore_errors=True)
-            if not os.path.isdir(BASE_DIR):
-                os.makedirs(os.path.join(BASE_DIR, "execution"))
-
-            consensus_ps = self.generate_concensus(*args, **options)
-            if not consensus_ps:
-                return
-            self.wait_ipc(),
-            cmd = "docker run{detach} -t --name ethnode-execution --rm -p 8545:{http} -p 30303:{tcp} -v ./execution:/root ethereum/client-go --http.addr 0.0.0.0 --ipcpath=/root/concensus.ipc".format(
-                detach=" -d" if options["detach"] else "",
-                http=settings.ETH_NODE["EXECUTION"]["HTTP"] or 8545,
-                tcp=settings.ETH_NODE["EXECUTION"]["TCP"] or 30303,
-            )
-            print("ETH Node - Execution client started!\n", cmd)
-            status = subprocess.call(cmd.split(" "), cwd=BASE_DIR)
-            consensus_ps.wait()
+            self.start_gateway(*args, **options)
         except Exception as e:
+            # TODO: handle e
+            raise e
             print(e)
         finally:
-            # TODO: stop container
-            exit(status)
+            self.cleanup()
 
-    def wait_ipc(self):
-        keys = list(
-            map(
-                lambda item: item.path,
-                os.scandir(os.path.join(BASE_DIR, "concensus", "data", "keystore")),
-            )
-        )
-        if not len(keys):
-            sleep(settings.ETH_NODE["CONCENSUS"]["THROTTLE_TIME"])
-            return self.wait_ipc()
-        print({"lastest_ipc": keys})
-        with open(keys[-1], "r") as src:
-            with open(
-                os.path.join(BASE_DIR, "execution", "concensus.ipc"), "w"
-            ) as dest:
-                return dest.write(src.read())
-
-    def generate_concensus(self, *args, **options):
+    def start_gateway(self, *args, **options):
         try:
-            is_newaccount_required = options["clean"] or options["newaccount"]
+            if not os.path.isdir(os.path.join(BASE_DIR, "gateway")):
+                os.makedirs(os.path.join(BASE_DIR, "gateway"))
+
+            self.consensus_ps = self.start_concensus(*args, **options)
+            if isinstance(self.consensus_ps, subprocess.Popen):
+                # TODO: stop if concensus_ps failed to start
+                if self.consensus_ps.poll() is not None:
+                    return
+                self.wait_concensus()
+            cmd = [
+                "docker",
+                "run",
+                *(["-d"] if options["detach"] else []),
+                "-t",
+                "--name",
+                "ethnode-gateway",
+                "--rm",
+                "-p",
+                "8545:%d" % (settings.ETH_NODE["GATEWAY"]["HTTP"] or 8545),
+                "-p",
+                "30303:%d" % (settings.ETH_NODE["GATEWAY"]["TCP"] or 30303),
+                "-v",
+                os.path.join(BASE_DIR, "gateway/:/root/"),
+                "-v",
+                os.path.join(BASE_DIR, "consensus/keystore:/keystore:ro"),
+                "ethereum/client-go",
+                "--http.addr",
+                "0.0.0.0",
+                "--ipcpath",
+                "/root/.ethereum/geth/geth.ipc",
+                "--keystore",
+                "/keystore",
+            ]
+            print("ETH Node - Gateway client started!\n", cmd)
+            self.gateway_ps = subprocess.run(cmd, cwd=BASE_DIR)
+            self.consensus_ps.wait()
+        except Exception as e:
+            # TODO: handle Error
+            raise e
+            print(e)
+
+    def start_concensus(self, *args, **options):
+        try:
+            is_newaccount_required = options["reset"] or options["newaccount"]
             if options["newaccount"]:
-                shutil.rmtree(os.path.join(BASE_DIR, "concensus"), ignore_errors=True)
-            if not os.path.isdir(os.path.join(BASE_DIR, "concensus")):
-                os.makedirs(os.path.join(BASE_DIR, "concensus", "data", "keystore"))
-                os.makedirs(os.path.join(BASE_DIR, "concensus", "tmp"))
+                shutil.rmtree(os.path.join(BASE_DIR, "consensus"), ignore_errors=True)
+            if not os.path.isdir(os.path.join(BASE_DIR, "consensus")):
+                os.makedirs(os.path.join(BASE_DIR, "consensus", "keystore"))
+                touch(os.path.join(BASE_DIR, "consensus", "run", "pcscd", "pcscd.comm"))
                 if options["password"]:
                     with open(
-                        os.path.join(BASE_DIR, "concensus", "data", "password"), "w"
+                        os.path.join(BASE_DIR, "consensus", "password"), "w"
                     ) as fd:
                         fd.write(options["password"])
                     is_newaccount_required = True
                 else:
-                    exit("-w, --password is required")
+                    raise ValueError("-w, --password is required")
 
-            cmd = "docker run{detach} -t --name ethnode-concensus --rm -p 8550:{http} -v ./concensus/tmp:/tmp -v ./concensus/data:/app/data -e CLEF_CHAINID={chainid} ethersphere/clef{full}".format(
-                detach=" -d" if options["detach"] else "",
-                http=settings.ETH_NODE["CONCENSUS"]["HTTP"] or 8550,
-                full=(" full" if is_newaccount_required else ""),
-                chainid=(
-                    11155111  # Sepolia testnet
-                    if settings.DEBUG
-                    else settings.ETH_NODE["CONCENSUS"]["CHAIN_ID"]
+            cmd = [
+                "docker",
+                "run",
+                "-t",
+                *(["-d"] if options["detach"] else []),
+                "--name",
+                "ethnode-concensus",
+                "--rm",
+                "-p",
+                "8550:%s" % (settings.ETH_NODE["CONCENSUS"]["HTTP"] or 8550),
+                "-v",
+                os.path.join(BASE_DIR, "consensus:/app/data"),
+                "-v",
+                os.path.join(BASE_DIR, "consensus/password:/app/data/password:ro"),
+                "-v",
+                os.path.join(
+                    BASE_DIR, "gateway/.ethereum/geth/geth.ipc:/app/geth/geth.ipc:rw"
                 ),
+                "ethersphere/clef",
+                "init" if is_newaccount_required else "",
+            ]
+            subprocess.check_call(cmd, cwd=BASE_DIR)
+            cmd[-1] = " ".join(
+                [
+                    "/usr/local/bin/bee-clef",
+                    "--stdio-ui",
+                    "--keystore",
+                    "/app/data/keystore",
+                    "--configdir",
+                    "/app/data/",
+                    "--chainid",
+                    CHAIN_ID,
+                    "--http",
+                    "--http.addr",
+                    "0.0.0.0",
+                    "--http.port",
+                    "8550",
+                    "--http.vhosts",
+                    "'*'",
+                    "--rules",
+                    "/app/config/rules.js",
+                    "--nousb",
+                    "--lightkdf",
+                    "--ipcpath",
+                    "/app/geth/geth.ipc",
+                    "--4bytedb-custom ",
+                    "/app/config/4byte.json",
+                    "--pcscdpath",
+                    "/app/data/run/pcscd/pcscd.comm",
+                    "--auditlog",
+                    "''",
+                    "--loglevel",
+                    "3",
+                ]
             )
             print("ETH Node - Consensus client started!\n", cmd)
-            return subprocess.Popen(cmd.split(" "), cwd=BASE_DIR)
+            return subprocess.Popen(cmd, cwd=BASE_DIR)
         except Exception as e:
+            # TODO: handle Error
+            raise e
             print(e)
-        finally:
-            # TODO: stop container
-            pass
+
+    def cleanup_container(self, name):
+        found = (
+            subprocess.run(
+                [
+                    "docker",
+                    "container",
+                    "ls",
+                    "-a",
+                    "-f",
+                    "name=%s" % name,
+                ],
+                cwd=BASE_DIR,
+                capture_output=True,
+                text=True,
+            ).stdout.find(name)
+            != -1
+        )
+        if found:
+            subprocess.check_call(
+                [
+                    "docker",
+                    "container",
+                    "stop",
+                    name,
+                ],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.call(
+                [
+                    "docker",
+                    "container",
+                    "rm",
+                    name,
+                ],
+                cwd=BASE_DIR,
+                stderr=subprocess.DEVNULL,
+            )
+
+    def wait_concensus(self):
+        keys = []
+        if os.path.isdir(os.path.join(BASE_DIR, "consensus", "keystore")):
+            keys = list(
+                map(
+                    lambda item: item.path,
+                    os.scandir(os.path.join(BASE_DIR, "consensus", "keystore")),
+                )
+            )
+        if not len(keys):
+            sleep(settings.ETH_NODE["CONCENSUS"]["THROTTLE_TIME"])
+            self.wait_concensus()
+            return False
+        # TODO: rm debug codes
+        # subprocess.call(["code", keys[-1]])
+        return True
+
+    def cleanup(self):
+        if self.consensus_ps:
+            self.consensus_ps.terminate()
+        if self.gateway_ps:
+            print("exit ", self.gateway_ps.returncode)
+        self.cleanup_container("ethnode-concensus")
+        self.cleanup_container("ethnode-gateway")
