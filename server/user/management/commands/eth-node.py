@@ -32,7 +32,7 @@ class Command(BaseCommand):
             "-u",
             "--newaccount",
             action="store_true",
-            help="Request a new wallet address?",
+            help="Request a new wallet address",
         )  # on/off flag
         parser.add_argument(
             "-w",
@@ -40,7 +40,10 @@ class Command(BaseCommand):
             help="A password that is at least 10 characters long",
         )
         parser.add_argument(
-            "-r", "--reset", action="store_true", help="Clean volumes?"
+            "-r", "--reset", action="store_true", help="Clean volumes"
+        )  # on/off flag
+        parser.add_argument(
+            "-t", "--tty", action="store_true", help="Enable TTY for container"
         )  # on/off flag
 
     ps = dict()
@@ -78,8 +81,7 @@ class Command(BaseCommand):
                 "docker",
                 "run",
                 # tty enable docker logs coloring
-                "-t",
-                # "-d",
+                *(["-t"] if options["tty"] else []),
                 "--name",
                 settings.ETH_NODE["EXECUTION"]["NAME"],
                 "--rm",
@@ -128,8 +130,7 @@ class Command(BaseCommand):
                 "docker",
                 "run",
                 # tty enable docker logs coloring
-                "-t",
-                # "-d",
+                *(["-t"] if options["tty"] else []),
                 "--name",
                 settings.ETH_NODE["SIGNER"]["NAME"],
                 "--rm",
