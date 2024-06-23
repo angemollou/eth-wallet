@@ -197,11 +197,17 @@ AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
     "BASE_DIR": BASE_DIR.joinpath(".ethnode"),
-    "GATEWAY": {"HTTP": 8545, "TCP": 30303},
-    "CONCENSUS": {
+    "EXECUTION": {
+        "HTTP": 8545,
+        "TCP": 30303,
+        "IMAGE": "ethereum/client-go:latest",
+        "NAME": "ethnode-execution",
+    },
+    "SIGNER": {
         "HTTP": 8550,
         "CHAIN_ID": 1,
-        # secs
-        "THROTTLE_TIME": 2,
+        "IMAGE": "ethersphere/clef:latest",
+        "NAME": "ethnode-signer",
     },
+    "WAIT_THROTTLE_TIME": 2,  # secs
 }
