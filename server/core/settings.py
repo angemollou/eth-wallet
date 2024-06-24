@@ -197,17 +197,34 @@ AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
     "BASE_DIR": BASE_DIR.joinpath(".ethnode"),
+    "WAIT_THROTTLE_TIME": 2,  # secs
     "EXECUTION": {
-        "HTTP": 8545,
-        "TCP": 30303,
         "IMAGE": "ethereum/client-go:latest",
         "NAME": "ethnode-execution",
+        "P2P": {"ETH": 30303},
+        "AUTH": {
+            "addr": "0.0.0.0",
+            "PORT": 8551,
+            "VHOSTS": "*",
+        },
+        "IPC": {},
+        "HTTP": {
+            "ADDR": "0.0.0.0",
+            "PORT": 8545,
+            "API": "eth,net,web3",
+            "CORSDOMAIN": None,
+        },
+        "WS": {
+            "ADDR": "0.0.0.0",
+            "PORT": 3334,
+            "API": "eth,net,web3",
+            "ORIGINS": "localhost",
+        },
     },
     "SIGNER": {
-        "HTTP": 8550,
-        "CHAIN_ID": 1,
         "IMAGE": "ethersphere/clef:latest",
         "NAME": "ethnode-signer",
+        "HTTP": {"PORT": 8550},
+        "CHAIN_ID": 1,
     },
-    "WAIT_THROTTLE_TIME": 2,  # secs
 }

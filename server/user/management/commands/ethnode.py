@@ -21,7 +21,6 @@ CHAIN_ID = (
     if settings.DEBUG
     else settings.ETH_NODE["SIGNER"]["CHAIN_ID"]
 )
-DATA_SUBDIR = ".ethereum"
 
 
 def touch(path, content=None):
@@ -47,18 +46,135 @@ class Command(BaseCommand):
             "--newaccount",
             action="store_true",
             help="Request a new wallet address",
-        )  # on/off flag
+        )
         parser.add_argument(
             "-w",
             "--password",
             help="A password that is at least 10 characters long",
         )
         parser.add_argument(
-            "-r", "--reset", action="store_true", help="Clean volumes"
-        )  # on/off flag
+            "-r",
+            "--reset",
+            action="store_true",
+            help="Clean all data",
+        )
         parser.add_argument(
-            "-t", "--tty", action="store_true", help="Enable TTY for container"
-        )  # on/off flag
+            "-t",
+            "--tty",
+            action="store_true",
+            help="Enable the TTY of runtime sys",
+        )
+        # CONSENSUS options
+        parser.add_argument(
+            "--http",
+            action="store_true",
+            help="Enable the HTTP-RPC server",
+            default="HTTP" in settings.ETH_NODE["EXECUTION"],
+        )
+        parser.add_argument(
+            "--http.addr",
+            help="HTTP-RPC server listening interface",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["HTTP"].get("ADDR", "localhost")
+                if "HTTP" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--http.port",
+            help="HTTP-RPC server listening port",
+            default=(
+                str(settings.ETH_NODE["EXECUTION"]["HTTP"].get("PORT", 8545))
+                if "HTTP" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--http.api",
+            help="Namespaces accessible over the HTTP-RPC interface",
+            nargs="+",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["HTTP"].get("API", "eth,net,web3")
+                if "HTTP" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--http.corsdomain",
+            help="Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+            nargs="+",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["HTTP"].get("CORSDOMAIN")
+                if "HTTP" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--ws",
+            action="store_true",
+            help="Enable the WS-RPC server",
+            default="WS" in settings.ETH_NODE["EXECUTION"],
+        )
+        parser.add_argument(
+            "--ws.addr",
+            help="WS-RPC server listening interface",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["WS"].get("ADDR", "localhost")
+                if "WS" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--ws.port",
+            help="WS-RPC server listening port",
+            default=(
+                str(settings.ETH_NODE["EXECUTION"]["WS"].get("PORT", 3334))
+                if "WS" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--ws.api",
+            help="Namespaces accessible over the WS-RPC interface",
+            nargs="+",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["WS"].get("API", "eth,net,web3")
+                if "WS" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--ws.origins",
+            help="Comma separated list of domains from which to accept WebSocket requests",
+            nargs="+",
+            default=(
+                settings.ETH_NODE["EXECUTION"]["WS"].get("ORIGINS", "localhost")
+                if "WS" in settings.ETH_NODE["EXECUTION"]
+                else None
+            ),
+        )
+        parser.add_argument(
+            "--ipcdisable",
+            action="store_true",
+            help="Disable the IPC-RPC server",
+            default="IPC" not in settings.ETH_NODE["EXECUTION"],
+        )
+        parser.add_argument(
+            "--authrpc.addr",
+            help="AUTH-RPC server listening interface",
+            default=settings.ETH_NODE["EXECUTION"]["AUTH"].get("ADDR", "localhost"),
+        )
+        parser.add_argument(
+            "--authrpc.port",
+            help="AUTH-RPC server listening port",
+            default=str(settings.ETH_NODE["EXECUTION"]["AUTH"].get("PORT", 8551)),
+        )
+        parser.add_argument(
+            "--authrpc.vhosts",
+            help="Comma separated list of domains from which to accept AUTH requests",
+            nargs="+",
+            default=settings.ETH_NODE["EXECUTION"]["AUTH"].get("ORIGINS", "localhost"),
+        )
 
     ps = dict()
     is_newaccount_required = False
@@ -83,6 +199,7 @@ class Command(BaseCommand):
 
         except Exception as e:
             logger.error("ERROR was not handled  %s", e)
+            raise e
         finally:
             self.cleanup()
 
@@ -90,7 +207,7 @@ class Command(BaseCommand):
         try:
             if not os.path.isdir(self.execution_path()):
                 os.makedirs(self.execution_path())
-
+            consensus_options = self.sync_consensus(self, *_, **options)
             cmd = [
                 "docker",
                 "run",
@@ -100,26 +217,27 @@ class Command(BaseCommand):
                 settings.ETH_NODE["EXECUTION"]["NAME"],
                 "--rm",
                 "-p",
-                "8545:%d" % (settings.ETH_NODE["EXECUTION"]["HTTP"] or 8545),
-                "-p",
-                "30303:%d" % (settings.ETH_NODE["EXECUTION"]["TCP"] or 30303),
+                "30303:%d" % (settings.ETH_NODE["EXECUTION"]["P2P"]["ETH"] or 30303),
+                *consensus_options["ports"],
                 "-v",
                 "%s:/root" % self.execution_path(),
-                # Constraint: make be generated by SIGNER
+                # Constraint: must be generated by SIGNER
                 "-v",
                 "%s:/root/.ethereum/keystore:ro" % self.signer_path("data/keystore"),
-                # Constraint: make be created inside EXECUTION container
+                # Constraint: must be created inside EXECUTION container
                 # "-v",
                 # "%s:/root/.ethereum/geth/geth.ipc"
                 # % self.execution_path(".ethereum/geth/geth.ipc"),
                 settings.ETH_NODE["EXECUTION"]["IMAGE"],
-                "--http.addr",
-                "0.0.0.0",
                 "--keystore",
                 "/root/.ethereum/keystore",
-                "--ipcpath",
-                "/root/.ethereum/geth/geth.ipc",
+                # CONCENCUS
+                # Constraint: must be created inside EXECUTION container for CONSENSUS
+                "--authrpc.jwtsecret",
+                "/root/.ethereum/geth/jwtsecret",
+                *consensus_options["entrypoint_args"],
             ]
+            print(cmd)
             return cmd
         except Exception as e:
             self.handle_error("execution", e)
@@ -131,6 +249,58 @@ class Command(BaseCommand):
             return cmd
         except Exception as e:
             self.handle_error("signer", e)
+
+    def sync_consensus(self, *_, **options):
+        try:
+            if not os.path.isdir(self.consensus_path()):
+                os.makedirs(self.consensus_path())
+
+            ports = [
+                ("--http.port", options["http.port"]),
+                ("--ws.port", options["ws.port"]),
+                ("--authrpc.port", options["authrpc.port"]),
+            ]
+            others = [
+                ("--http", options["http"]),
+                ("--http.addr", options["http.addr"]),
+                ("--http.api", options["http.api"]),
+                ("--http.corsdomain", options["http.corsdomain"]),
+                ("--ws", options["ws"]),
+                ("--ws.addr", options["ws.addr"]),
+                ("--ws.api", options["ws.api"]),
+                ("--ws.origins", options["ws.origins"]),
+                ("--ipcdisable", options["ipcdisable"]),
+                *(
+                    []
+                    if options["ipcdisable"]
+                    else [("--ipcpath", "/root/.ethereum/geth/geth.ipc")]
+                ),
+                ("--authrpc.addr", options["authrpc.addr"]),
+                ("--authrpc.vhosts", options["authrpc.vhosts"]),
+                # (--pcscdpath, "/run/pcscd/pcscd.comm") # $GETH_PCSCDPATH
+            ]
+            ports_map = []
+            for pair in map(lambda p: ("-p", "%s:%s" % (p[1], p[1])), ports):
+                try:
+                    int(pair[0])
+                except ValueError as e:
+                    continue
+                ports_map.extend(pair)
+            others_map = []
+            for opt in [*ports, *others]:
+                name, value = opt
+
+                if value in ("", None, False, 0):
+                    continue
+                elif value in (True, 1):
+                    others_map.append(name)
+                    continue
+
+                others_map.extend((name, value))
+
+            return {"ports": ports_map, "entrypoint_args": others_map}
+        except Exception as e:
+            self.handle_error("execution", e)
 
     def init_signer(self, *_, **options):
         try:
@@ -163,7 +333,7 @@ class Command(BaseCommand):
                 settings.ETH_NODE["SIGNER"]["NAME"],
                 "--rm",
                 "-p",
-                "8550:%s" % (settings.ETH_NODE["SIGNER"]["HTTP"] or 8550),
+                "8550:%s" % (settings.ETH_NODE["SIGNER"]["HTTP"]["PORT"] or 8550),
                 "-e",
                 "DATA=/app/data",  # --configdir=$DATA
                 "-e",
@@ -270,6 +440,9 @@ class Command(BaseCommand):
 
     def execution_path(self, *path):
         return self.abs_path("execution", *path)
+
+    def consensus_path(self, *path):
+        return self.abs_path("consensus", *path)
 
     def handle_error(self, service="", e=Exception()):
         if isinstance(e, KeyboardInterrupt):
