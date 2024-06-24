@@ -207,24 +207,64 @@ ETH_NODE = {
             "PORT": 8551,
             "VHOSTS": "*",
         },
-        "IPC": {},
-        "HTTP": {
-            "ADDR": "0.0.0.0",
-            "PORT": 8545,
-            "API": "eth,net,web3",
-            "CORSDOMAIN": None,
-        },
+        # "IPC": {},
+        # "HTTP": {
+        #     "ADDR": "0.0.0.0",
+        #     "PORT": 8545,
+        #     "API": "eth,net,web3",
+        #     "CORSDOMAIN": None,
+        # },
         "WS": {
             "ADDR": "0.0.0.0",
             "PORT": 3334,
             "API": "eth,net,web3",
-            "ORIGINS": "localhost",
+            "ORIGINS": "*",
         },
+        "SIGNER": "http://0.0.0.0:8550",
+        # "SIGNER": "/root/clef/clef.ipc",
     },
     "SIGNER": {
         "IMAGE": "ethersphere/clef:latest",
         "NAME": "ethnode-signer",
-        "HTTP": {"PORT": 8550},
-        "CHAIN_ID": 1,
+        # "IPC": {},
+        # "HTTP": {
+        #     "ADDR": "0.0.0.0",
+        #     "PORT": 8550,
+        #     "VHOSTS": "*",
+        # },
+        "NOUSB": True,
+        "LIGHTKDF": True,
+        "CHAIN_ID": 1,  # Mainnet,
+        "MASTER_PASSWORD": "1234567890",  # > 10 characters
+        "RULES_JS": """function OnSignerStartup() {
+    return "Approve"
+}
+function OnApprovedTx() {
+    return "Approve"
+}
+function ApproveListing() {
+    return "Approve"
+}
+function ApproveTx() {
+    return "Approve"
+}
+function ApproveSignData() {
+    return "Approve"
+}""",
+        "4BYTEDB_CUSTOM": """{
+  "0d5f2659": "cashChequeBeneficiary(address,uint256,bytes)",
+  "576d7271": "deploySimpleSwap(address,uint256)",
+  "15efd8a7": "deploySimpleSwap(address,uint256,bytes32)",
+  "2e1a7d4d": "withdraw(uint256)",
+  "e9563f05": "createBatch(address,uint256,uint8,bytes32)",
+  "5239af71": "createBatch(address,uint256,uint8,uint8,bytes32,bool)",
+  "b67644b9": "topUp(bytes32,uint256)",
+  "47aab79b": "increaseDepth(bytes32,uint8)",
+  "4a2e7598": "commit(bytes32,bytes32,uint256)",
+  "c1d810d5": "reveal(bytes32,uint8,bytes32,bytes32)",
+  "4e71d92d": "claim()",
+  "1ed2cd40": "depositStake(address,bytes32,uint256)",
+  "e34c4527": "withdrawFromStake(bytes32,uint256)"
+}""",
     },
 }
