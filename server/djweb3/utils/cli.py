@@ -15,11 +15,11 @@ LOG_SEPARATOR = "\n{}\n".format(
     else TERMINAL_SIZE[0]
 )
 logging.basicConfig(format="[%(asctime)s]  %(name)s  %(message)s")
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
-def wait(path, log=False, interval=2):
-    logger.warning("WAIT  %s", path)
+def wait_fd(path, interval=2, log=False):
+    LOGGER.warning("WAIT  %s", path)
     keys = []
     if os.path.isfile(path):
         keys = [path]
@@ -27,10 +27,10 @@ def wait(path, log=False, interval=2):
         keys = os.listdir(path)
     if len(keys) == 0:
         sleep(interval)
-        wait(path)
+        wait_fd(path)
         return False
     if log:
-        logger.warning("WAIT LOG  %s%s\n", keys[-1], LOG_SEPARATOR)
+        LOGGER.warning("WAIT LOG  %s%s\n", keys[-1], LOG_SEPARATOR)
     return keys[-1]
 
 
@@ -48,54 +48,14 @@ def touch(path, content=None):
     return path
 
 
-def map_options(env=[], ports=[], entrypoint=[], volumes=[]):
-    ports_map = []
-    for pair in map(lambda p: ("-p", "{0}:{0}".format(p[1])), ports):
-        try:
-            int(pair[0])
-        except ValueError as _:
-            continue
-        ports_map.extend(pair)
-
-    entrypoint_map = []
-    for opt in [*ports, *entrypoint]:
-        name, value = opt
-
-        if value in ("", None, False, 0):
-            continue
-        elif value in (True, 1):
-            entrypoint_map.append(name)
-            continue
-
-        entrypoint_map.extend((name, value))
-
-    env_map = []
-    for opt in env:
-        name, value = opt
-
-        if value in ("", None):
-            continue
-        env_map.extend(("-e", "%s=%s" % (name, value)))
-
-    volumes_map = []
-    for opt in volumes:
-        name, value = opt
-
-        if value in ("", None):
-            continue
-        volumes_map.extend(("-v", "%s:%s" % (name, value)))
-
-    return {
-        "ports": ports_map,
-        "entrypoint": entrypoint_map,
-        "env": env_map,
-        "volumes": volumes_map,
-    }
-
-
 def load_json(path):
     with open(path, "r") as fd:
         return json.load(fd)
+
+
+def dump_json(data, path):
+    with open(path, "w+") as fd:
+        return json.dump(data, fd)
 
 
 def sha256sum(text):
@@ -113,15 +73,6 @@ def set_on(opt, condition, fallback=None):
         return []
 
 
-def validate_password(word):
-    if word:
-        if len(word) < 10:
-            raise ValueError("PASSWORD must be at least 10 characters")
-        return True
-    else:
-        raise ValueError("PASSWORD is required")
-
-
 def on(condition):
     def decorator_run_ps(func):
         @functools.wraps(func)
@@ -135,7 +86,7 @@ def on(condition):
 
 
 def cleanup_container(name, cwd=os.getcwd()):
-    logger.warning("CLEANUP CONTAINER  %s", name)
+    LOGGER.warning("CLEANUP CONTAINER  %s", name)
     try:
         found = (
             subprocess.run(
@@ -175,4 +126,4 @@ def cleanup_container(name, cwd=os.getcwd()):
                 stderr=subprocess.DEVNULL,
             )
     except Exception as e:
-        logger.warning("CLEAN UP CONTAINER - Error not handled  %s", e)
+        LOGGER.warning("CLEAN UP CONTAINER - Error not handled  %s", e)

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     # Apps
     "user",
+    "djweb3",
 ]
 
 MIDDLEWARE = [
@@ -93,20 +94,24 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
 
-# AUTH_PASSWORD_VALIDATORS = [
-#     {
-#         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-#     },
-#     {
-#         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-#     },
-#     {
-#         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-#     },
-#     {
-#         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-#     },
-# ]
+AUTH_PASSWORD_VALIDATORS = [
+    #     {
+    #         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    #     },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {
+            # requirement for ETH account
+            "min_length": 10,
+        },
+    },
+    #     {
+    #         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    #     },
+    #     {
+    #         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    #     },
+]
 
 
 # Internationalization
@@ -196,47 +201,71 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
-    "BASE_DIR": BASE_DIR.joinpath(".ethnode"),
-    "WAIT_THROTTLE_TIME": 2,  # secs
-    "EXECUTION": {
-        "IMAGE": "ethereum/client-go:latest",
-        "NAME": "ethnode-execution",
-        "P2P": {"ETH": 30303},
-        "AUTH": {
-            "addr": "0.0.0.0",
-            "PORT": 8551,
-            "VHOSTS": "*",
-        },
-        # "IPC": {},
-        # "HTTP": {
-        #     "ADDR": "0.0.0.0",
-        #     "PORT": 8545,
-        #     "API": "eth,net,web3",
-        #     "CORSDOMAIN": None,
-        # },
-        "WS": {
-            "ADDR": "0.0.0.0",
-            "PORT": 3334,
-            "API": "eth,net,web3",
-            "ORIGINS": "*",
-        },
-        "SIGNER": "http://0.0.0.0:8550",
-        # "SIGNER": "/root/clef/clef.ipc",
+    "base_dir": BASE_DIR.joinpath(".ethnode"),
+    "wait_throttle_time": 2,  # secs
+    "output": {
+        "docker": {
+            "json": BASE_DIR.joinpath("./docker-compose.json"),
+            "yaml": BASE_DIR.joinpath("./docker-compose.yml"),
+        }
     },
-    "SIGNER": {
-        "IMAGE": "ethersphere/clef:latest",
-        "NAME": "ethnode-signer",
-        # "IPC": {},
-        # "HTTP": {
-        #     "ADDR": "0.0.0.0",
-        #     "PORT": 8550,
-        #     "VHOSTS": "*",
-        # },
-        "NOUSB": True,
-        "LIGHTKDF": True,
-        "CHAIN_ID": 1,  # Mainnet,
-        "MASTER_PASSWORD": "1234567890",  # > 10 characters
-        "RULES_JS": """function OnSignerStartup() {
+    "execution": {
+        "image": "ethereum/client-go:latest",
+        "entrypoint": ["sh", "-c"],
+        "bin": "geth",
+        "name": "ethnode-execution",
+        "p2p": {"eth": "30303"},
+        "auth": {
+            "addr": "0.0.0.0",
+            "port": "8551",
+            "vhosts": "'*'",
+        },
+        "api": {
+            "ipc": {
+                "ipcpath": "/app/.ethereum/geth/geth.ipc",
+                "ipcdisable": False,
+            },
+            "http": {
+                "addr": "0.0.0.0",
+                "port": "8545",
+                "namespaces": "eth,net,web3",
+                "corsdomain": "",
+            },
+            "ws": {
+                "addr": "0.0.0.0",
+                "port": "3334",
+                "namespaces": "eth,net,web3",
+                "origins": "'*'",
+            },
+        },
+        "signer": "http://ethnode-signer:8550",
+        # "signer": "/app/clef/clef.ipc",
+    },
+    "signer": {
+        "image": "ethereum/client-go:alltools-latest",
+        "entrypoint": ["sh", "-c"],
+        "bin": "clef",
+        "name": "ethnode-signer",
+        "api": {
+            "ipc": {
+                "ipcpath": "/app/clef/clef.ipc",
+                "ipcdisable": False,
+            },
+            "http": {
+                "addr": "0.0.0.0",
+                "port": "8550",
+                "vhosts": "'*'",
+            },
+        },
+        "nousb": True,
+        "lightkdf": True,
+        "chain_id": {
+            "1": not DEBUG,  # Mainnet,
+            # "11155111": DEBUG,  # Sepolia testnet
+            "12345": DEBUG,  # Available/non-public yet
+        },
+        "master_password": "1234567890",  # > 10 characters
+        "rules_js": """function OnSignerStartup() {
     return "Approve"
 }
 function OnApprovedTx() {
@@ -251,7 +280,7 @@ function ApproveTx() {
 function ApproveSignData() {
     return "Approve"
 }""",
-        "4BYTEDB_CUSTOM": """{
+        "4bytedb": """{
   "0d5f2659": "cashChequeBeneficiary(address,uint256,bytes)",
   "576d7271": "deploySimpleSwap(address,uint256)",
   "15efd8a7": "deploySimpleSwap(address,uint256,bytes32)",
