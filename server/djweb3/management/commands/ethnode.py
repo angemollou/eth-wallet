@@ -203,6 +203,9 @@ class Command(BaseCommand):
         )
 
     options = dict()
+    signer = None
+    execution = None
+    consensus = None
 
     def handle(self, *args, **options):
         try:
@@ -276,20 +279,20 @@ class Command(BaseCommand):
             self.signer_setpw(self.options["password"], self.cmd["run"]["signer"])
 
     def compose(self, selected=[]):
-        props = {
-            service: {
-                **Mapper.service(
-                    getattr(self, "client_options_%s" % service),
-                ),
-                "volumes": getattr(self, "volumes_%s" % service),
-            }
-            for service in selected
-        }
         fragment = {}
         if "signer" in selected:
             fragment["signer"] = self.compose_service(
                 {
-                    **props["signer"],
+                    **Mapper.service(
+                        Signer.parse_options(
+                            {
+                                "chainid": CHAIN_ID,
+                                "tty": self.options["tty"],
+                                **settings.ETH_NODE["signer"],
+                            }
+                        )
+                    ),
+                    "volumes": Signer.volumes(Path.signer),
                     "depends_on": [],
                     "container_name": settings.ETH_NODE["signer"]["name"],
                     "client": "signer",
@@ -299,7 +302,16 @@ class Command(BaseCommand):
         if "consensus" in selected:
             fragment["consensus"] = self.compose_service(
                 {
-                    **props["consensus"],
+                    **Mapper.service(
+                        # Consensus.parse_options(
+                        #     {
+                        #         "chainid": CHAIN_ID,
+                        #         "tty": self.options["tty"],
+                        #         **settings.ETH_NODE["consensus"],
+                        #     }
+                        # )
+                    ),
+                    # "volumes": Consensus.volumes(Path.signer),
                     "depends_on": [],
                     "container_name": settings.ETH_NODE["consensus"]["name"],
                     "client": "consensus",
@@ -309,7 +321,21 @@ class Command(BaseCommand):
         if "execution" in selected:
             fragment["execution"] = self.compose_service(
                 {
-                    **props["execution"],
+                    **Mapper.service(
+                        Execution.parse_options(
+                            {
+                                "chainid": CHAIN_ID,
+                                "ipcdisable": settings.ETH_NODE["execution"]["api"][
+                                    "ipc"
+                                ]["ipcdisable"],
+                                "ipcpath": settings.ETH_NODE["execution"]["api"]["ipc"][
+                                    "ipcpath"
+                                ],
+                                **self.options,
+                            }
+                        )
+                    ),
+                    "volumes": Execution.volumes(Path.execution),
                     "depends_on": list(
                         filter(lambda i: i in selected, ["signer", "consensus"])
                     ),
@@ -354,212 +380,6 @@ class Command(BaseCommand):
             "ports": props["ports"],
             "volumes": props["volumes"],
         }
-
-    @property
-    def client_options_execution(self):
-        try:
-            if not os.path.isdir(Path.consensus()):
-                os.makedirs(Path.consensus())
-
-            ports = [
-                ("--http.port", self.options["http.port"]),
-                ("--ws.port", self.options["ws.port"]),
-                ("--authrpc.port", self.options["authrpc.port"]),
-            ]
-            cmd = [
-                ("--networkid", CHAIN_ID),
-                ("--authrpc.addr", self.options["authrpc.addr"]),
-                ("--authrpc.vhosts", self.options["authrpc.vhosts"]),
-                ("--signer", self.options["signer"]),
-                (
-                    ("--ipcdisable", True)
-                    if settings.ETH_NODE["execution"]["api"]["ipc"]["ipcdisable"]
-                    else (
-                        "--ipcpath",
-                        settings.ETH_NODE["execution"]["api"]["ipc"]["ipcpath"]
-                        or "/app/.ethereum/geth/geth.ipc",
-                    )
-                ),
-                ("--http", "http" in self.options),
-                ("--ws", "ws" in self.options),
-            ]
-
-            # Conditional
-            required = {
-                "http": "http" in self.options,
-                "ws": "ws" in self.options,
-            }
-            if required["http"]:
-                cmd.extend(
-                    [
-                        ("--http.addr", self.options["http.addr"]),
-                        ("--http.api", self.options["http.api"]),
-                        ("--http.corsdomain", self.options["http.corsdomain"]),
-                    ]
-                )
-            if required["ws"]:
-                cmd.extend(
-                    [
-                        ("--ws.addr", self.options["ws.addr"]),
-                        ("--ws.api", self.options["ws.api"]),
-                        ("--ws.origins", self.options["ws.origins"]),
-                    ]
-                )
-
-            return {
-                "tty": self.options["tty"],
-                **Mapper.client_options(ports=ports, cmd=cmd),
-            }
-        except Exception as e:
-            Logger.error("execution config", e)
-
-    @property
-    def volumes_execution(self):
-        return [
-            {
-                "type": "bind",
-                "source": Path.execution(),
-                "target": "/app/",
-            },
-            {
-                "type": "bind",
-                "source": Path.execution(".ethereum/geth/"),
-                "target": "/app/.ethereum/geth/",
-                "bind": {
-                    "selinux":
-                    # shared only with `signer`, related to `ipc` docker property
-                    "z"
-                },
-            },
-        ]
-
-    @property
-    def client_options_signer(self):
-        try:
-            # Mandatory
-            ports = []
-            cmd = [
-                ("--chainid", CHAIN_ID),
-                ("--nousb", "nousb" in settings.ETH_NODE["signer"]),
-                ("--lightkdf", "lightkdf" in settings.ETH_NODE["signer"]),
-                (
-                    ("--ipcdisable", True)
-                    if settings.ETH_NODE["signer"]["api"]["ipc"]["ipcdisable"]
-                    else (
-                        "--ipcpath",
-                        settings.ETH_NODE["signer"]["api"]["ipc"]["ipcpath"]
-                        or "/app/clef/clef.ipc",
-                    )
-                ),
-                # ("--pcscdpath", "/run/pcscd/pcscd.comm") # $GETH_PCSCDPATH,
-                ("--http", "http" in settings.ETH_NODE["signer"]["api"]),
-            ]
-
-            # Conditional
-            required = {"http": settings.ETH_NODE["signer"]["api"]["http"]}
-            if required["http"]:
-                ports.extend(
-                    [
-                        (
-                            "--http.port",
-                            settings.ETH_NODE["signer"]["api"]["http"].get(
-                                "port", "8550"
-                            ),
-                        ),
-                    ]
-                )
-                cmd.extend(
-                    [
-                        (
-                            "--http.addr",
-                            settings.ETH_NODE["signer"]["api"]["http"].get(
-                                "addr", "localhost"
-                            ),
-                        ),
-                        (
-                            "--http.vhosts",
-                            settings.ETH_NODE["signer"]["api"]["http"].get(
-                                "vhosts", "localhost"
-                            ),
-                        ),
-                    ]
-                )
-
-            return {
-                "tty": self.options["tty"],
-                **Mapper.client_options(ports=ports, cmd=cmd),
-            }
-        except Exception as e:
-            Logger.error("signer config", e)
-
-    @property
-    def volumes_signer(self):
-        return [
-            {
-                "type": "bind",
-                "source": Path.signer("config/rules.js"),
-                "target": "/app/config/rules.js",
-                # ensure integrity
-                "read_only": True,
-            },
-            {
-                "type": "bind",
-                "source": Path.signer("config/4byte.json"),
-                "target": "/app/config/4byte.json",
-                # ensure integrity
-                "read_only": True,
-            },
-            {
-                "type": "bind",
-                "source": Path.signer("data"),
-                "target": "/app/data/",
-            },
-            {
-                "type": "tmpfs",
-                # "source": Path.signer("tmp/stdin"),
-                "target": "/tmp/stdin",
-                "read_only": True,
-                "tmpfs": {
-                    "size": "1gb",
-                    # restricted deletion, owner readable
-                    "mode": 1400,
-                },
-            },
-            {
-                "type": "tmpfs",
-                # "source": Path.signer("tmp/stdout"),
-                "target": "/tmp/stdout",
-                "tmpfs": {
-                    "size": "1gb",
-                    # restricted deletion, owner writable
-                    "mode": 1200,
-                },
-            },
-            {
-                "type": "bind",
-                "source": Path.signer("clef/"),
-                "target": "/app/clef/",
-                "bind": {
-                    "selinux":
-                    # shared only with `execution`, related to `ipc` docker property
-                    "z"
-                },
-            },
-        ]
-
-    @property
-    def client_options_consensus(self):
-        # TODO
-        return {
-            "tty": self.options["tty"],
-            # **Mapper.client_options(ports=ports, cmd=cmd),
-        }
-
-    @property
-    def volumes_consensus(self):
-        return [
-            # TODO
-        ]
 
     @property
     def cmd(self):

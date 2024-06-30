@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 
+from djweb3.utils.mapper import Mapper
 from djweb3.utils.models import SingletonAbstract
 from djweb3.utils import load_json, sha256sum, touch, Logger
 from djweb3.utils.validator import Validator
@@ -151,3 +152,110 @@ class Signer(SingletonAbstract):
                 return sha256sum(fd.read())
         except FileNotFoundError as e:
             Logger.error("account not found - attest rulesets  %s", e)
+
+    @classmethod
+    def parse_options(cls, options):
+        try:
+            # Mandatory
+            ports = []
+            cmd = [
+                ("--chainid", options["chainid"]),
+                ("--nousb", "nousb" in options),
+                ("--lightkdf", "lightkdf" in options),
+                (
+                    ("--ipcdisable", True)
+                    if options["api"]["ipc"]["ipcdisable"]
+                    else (
+                        "--ipcpath",
+                        options["api"]["ipc"]["ipcpath"] or "/app/clef/clef.ipc",
+                    )
+                ),
+                # ("--pcscdpath", "/run/pcscd/pcscd.comm") # $GETH_PCSCDPATH,
+                ("--http", "http" in options["api"]),
+            ]
+
+            # Conditional
+            required = {"http": options["api"]["http"]}
+            if required["http"]:
+                ports.extend(
+                    [
+                        (
+                            "--http.port",
+                            options["api"]["http"].get("port", "8550"),
+                        ),
+                    ]
+                )
+                cmd.extend(
+                    [
+                        (
+                            "--http.addr",
+                            options["api"]["http"].get("addr", "localhost"),
+                        ),
+                        (
+                            "--http.vhosts",
+                            options["api"]["http"].get("vhosts", "localhost"),
+                        ),
+                    ]
+                )
+
+            return {
+                "tty": options["tty"],
+                **Mapper.client_options(ports=ports, cmd=cmd),
+            }
+        except Exception as e:
+            Logger.error("signer config", e)
+
+    @classmethod
+    def volumes(cls, path):
+        return [
+            {
+                "type": "bind",
+                "source": path("config/rules.js"),
+                "target": "/app/config/rules.js",
+                # ensure integrity
+                "read_only": True,
+            },
+            {
+                "type": "bind",
+                "source": path("config/4byte.json"),
+                "target": "/app/config/4byte.json",
+                # ensure integrity
+                "read_only": True,
+            },
+            {
+                "type": "bind",
+                "source": path("data"),
+                "target": "/app/data/",
+            },
+            {
+                "type": "tmpfs",
+                # "source": path("tmp/stdin"),
+                "target": "/tmp/stdin",
+                "read_only": True,
+                "tmpfs": {
+                    "size": "1gb",
+                    # restricted deletion, owner readable
+                    "mode": 1400,
+                },
+            },
+            {
+                "type": "tmpfs",
+                # "source": path("tmp/stdout"),
+                "target": "/tmp/stdout",
+                "tmpfs": {
+                    "size": "1gb",
+                    # restricted deletion, owner writable
+                    "mode": 1200,
+                },
+            },
+            {
+                "type": "bind",
+                "source": path("clef/"),
+                "target": "/app/clef/",
+                "bind": {
+                    "selinux":
+                    # shared only with `execution`, related to `ipc` docker property
+                    "z"
+                },
+            },
+        ]

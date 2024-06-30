@@ -208,6 +208,7 @@ ETH_NODE = {
             "yaml": str(BASE_DIR.joinpath("./docker-compose.yml")),
         },
     },
+    "consensus": {},
     "execution": {
         "image": "ethereum/client-go:latest",
         "entrypoint": ["sh", "-c"],
