@@ -53,12 +53,14 @@ class Mapper:
     @classmethod
     def port(cls, s: tuple[str, str]):
         """
-        @param s: e.g. (--http.port, '111')
+        @param s: e.g. (--http.port, '111'), (--http-port, '111')
         """
         key, value = s
         try:
             return {
-                "protocol": key.removeprefix("--").removesuffix(".port"),
+                "protocol": key.removeprefix("--").removesuffix(
+                    ".port" if "." in key else "-port"
+                ),
                 "port": int(value),
             }
         except ValueError:

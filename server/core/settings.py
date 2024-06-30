@@ -208,11 +208,35 @@ ETH_NODE = {
             "yaml": str(BASE_DIR.joinpath("./docker-compose.yml")),
         },
     },
-    "consensus": {},
+    "consensus": {
+        "image": "sigp/lighthouse:latest",
+        "entrypoint": ["sh", "-c"],
+        "bin": ["lighthouse", "bn"],
+        "name": "ethnode-consensus",
+        "network": "sepolia" if DEBUG else "mainnet",
+        "api": {
+            "http": {
+                "address": "0.0.0.0",
+                "port": "5052",
+                "allow-origin": "'*'",
+                "enable-tls": False,
+                "tls-cert": "cert.pem",
+                "tls-key": "key.pem",
+            },
+        },
+        "execution-endpoint": "http://ethnode-consensus:8551",
+        # Refer to this list `https://eth-clients.github.io/checkpoint-sync-endpoints/`
+        "checkpoint-sync-url": (
+            "https://sepolia.beaconstate.info"
+            if DEBUG
+            else "https://mainnet.checkpoint.sigp.io"
+        ),
+        "allow-insecure-genesis-sync": False,
+    },
     "execution": {
         "image": "ethereum/client-go:latest",
         "entrypoint": ["sh", "-c"],
-        "bin": "geth",
+        "bin": ["geth"],
         "name": "ethnode-execution",
         "p2p": {"eth": "30303"},
         "auth": {
@@ -244,7 +268,7 @@ ETH_NODE = {
     "signer": {
         "image": "ethereum/client-go:alltools-latest",
         "entrypoint": ["sh", "-c"],
-        "bin": "echo ok | clef",
+        "bin": ["clef"],
         "name": "ethnode-signer",
         "api": {
             "ipc": {

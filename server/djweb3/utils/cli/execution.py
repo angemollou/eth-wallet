@@ -1,6 +1,5 @@
 import os
-import shutil
-from djweb3.utils.cli.common import set_on
+from djweb3.utils.cli.common import touch
 from djweb3.utils.event import Logger
 from djweb3.utils.mapper import Mapper
 from djweb3.utils.models import SingletonAbstract
@@ -9,10 +8,12 @@ from djweb3.utils.models import SingletonAbstract
 class Execution(SingletonAbstract):
     def __init__(self, **kwargs) -> None:
         self.path = kwargs["path"]
+        self.jwtsecret = kwargs["jwtsecret"]
 
         try:
             if not os.path.isdir(self.path()):
                 os.makedirs(self.path())
+                touch(self.path(".ethereum/geth/jwtsecret"), self.jwtsecret)
 
             Logger.info("init", "execution", "success")
         except Exception as e:
@@ -76,6 +77,13 @@ class Execution(SingletonAbstract):
     @classmethod
     def volumes(cls, path):
         return [
+            {
+                "type": "bind",
+                "source": path(".ethereum/geth/jwtsecret"),
+                "target": "/root/.ethereum/geth/jwtsecret",
+                # ensure integrity
+                "read_only": True,
+            },
             {
                 "type": "bind",
                 "source": path(),

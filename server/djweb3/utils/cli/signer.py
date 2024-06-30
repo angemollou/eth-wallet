@@ -44,7 +44,7 @@ class Signer(SingletonAbstract):
                 *self.cmd["entrypoint"],
                 " ".join(
                     [
-                        self.cmd["bin"],
+                        *self.cmd["bin"],
                         "--configdir",
                         "/app/data",
                         "--stdio-ui",
@@ -67,7 +67,7 @@ class Signer(SingletonAbstract):
                     *self.cmd["entrypoint"],
                     " ".join(
                         [
-                            self.cmd["bin"],
+                            *self.cmd["bin"],
                             "--configdir",
                             "/app/data",
                             "--keystore",
@@ -92,7 +92,7 @@ class Signer(SingletonAbstract):
                     *self.cmd["entrypoint"],
                     " ".join(
                         [
-                            self.cmd["bin"],
+                            *self.cmd["bin"],
                             "--keystore",
                             "/app/data/keystore",
                             "--stdio-ui",
@@ -116,7 +116,7 @@ class Signer(SingletonAbstract):
                     *self.cmd["entrypoint"],
                     " ".join(
                         [
-                            self.cmd["bin"],
+                            *self.cmd["bin"],
                             "--configdir",
                             "/app/data",
                             "--keystore",
@@ -202,7 +202,7 @@ class Signer(SingletonAbstract):
             return {
                 "tty": options["tty"],
                 "ports": mapping["ports"],
-                "cmd": [*mapping["cmd"], "<< EOF\nok\nEOF"],
+                "cmd": [*mapping["cmd"], "<<EOF\nok\nEOF"],
             }
         except Exception as e:
             Logger.error("signer config", e)

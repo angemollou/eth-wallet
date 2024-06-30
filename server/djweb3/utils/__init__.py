@@ -6,5 +6,4 @@ from . import path
 from . import validator
 from . import normalizer
 
-from .cli import signer
-from .cli import execution
+from .cli import signer, execution, consensus

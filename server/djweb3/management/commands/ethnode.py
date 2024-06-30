@@ -7,6 +7,7 @@ from djweb3.utils import (
     dump_json,
     dump_yaml,
 )
+from djweb3.utils.cli.consensus import Consensus
 from djweb3.utils.event import Logger
 from djweb3.utils.mapper import Mapper
 from djweb3.utils.cli.signer import Signer
@@ -14,6 +15,7 @@ from djweb3.utils.cli.execution import Execution
 from djweb3.utils.validator import Validator
 from djweb3.utils.normalizer import Normalizer
 from djweb3.utils.path import Path
+import binascii
 
 Path = Path(str(settings.ETH_NODE["output"]["container"]))
 
@@ -204,6 +206,7 @@ class Command(BaseCommand):
 
     options = dict()
     signer = None
+    jwtsecret = ""
     execution = None
     consensus = None
 
@@ -239,7 +242,7 @@ class Command(BaseCommand):
         self.up()
 
     def generate(self):
-        compose_dict = self.compose(["signer", "execution"])
+        compose_dict = self.compose(["signer", "execution", "consensus"])
         if self.options["generate.json"]:
             dump_json(
                 compose_dict,
@@ -262,8 +265,14 @@ class Command(BaseCommand):
                 "cwd": Path.abs(),
             },
         )
+        self.jwtsecret = binascii.hexlify(os.urandom(16)).hex()
         self.execution = Execution(
             path=Path.execution,
+            jwtsecret=self.jwtsecret,
+        )
+        self.consensus = Consensus(
+            path=Path.consensus,
+            jwtsecret=self.jwtsecret,
         )
 
     def up(self):
@@ -299,25 +308,6 @@ class Command(BaseCommand):
                     "working_dir": "/app",
                 }
             )
-        if "consensus" in selected:
-            fragment["consensus"] = self.compose_service(
-                {
-                    **Mapper.service(
-                        # Consensus.parse_options(
-                        #     {
-                        #         "chainid": CHAIN_ID,
-                        #         "tty": self.options["tty"],
-                        #         **settings.ETH_NODE["consensus"],
-                        #     }
-                        # )
-                    ),
-                    # "volumes": Consensus.volumes(Path.signer),
-                    "depends_on": [],
-                    "container_name": settings.ETH_NODE["consensus"]["name"],
-                    "client": "consensus",
-                    "working_dir": "/app/",
-                }
-            )
         if "execution" in selected:
             fragment["execution"] = self.compose_service(
                 {
@@ -337,12 +327,38 @@ class Command(BaseCommand):
                         )
                     ),
                     "volumes": Execution.volumes(Path.execution),
-                    "depends_on": list(
-                        filter(lambda i: i in selected, ["signer", "consensus"])
-                    ),
+                    "depends_on": list(filter(lambda i: i in selected, ["signer"])),
                     "container_name": settings.ETH_NODE["execution"]["name"],
                     "client": "execution",
-                    "working_dir": "/app/",
+                    "working_dir": "/root/",
+                }
+            )
+        if "consensus" in selected:
+            fragment["consensus"] = self.compose_service(
+                {
+                    **Mapper.service(
+                        Consensus.parse_options(
+                            {
+                                "tty": self.options["tty"],
+                                "network": settings.ETH_NODE["consensus"]["network"],
+                                "checkpoint-sync-url": settings.ETH_NODE["consensus"][
+                                    "checkpoint-sync-url"
+                                ],
+                                "allow-insecure-genesis-sync": settings.ETH_NODE[
+                                    "consensus"
+                                ]["allow-insecure-genesis-sync"],
+                                "execution-endpoint": settings.ETH_NODE["consensus"][
+                                    "execution-endpoint"
+                                ],
+                                "api": settings.ETH_NODE["consensus"]["api"],
+                            }
+                        )
+                    ),
+                    "volumes": Consensus.volumes(Path.consensus),
+                    "depends_on": list(filter(lambda i: i in selected, ["execution"])),
+                    "container_name": settings.ETH_NODE["consensus"]["name"],
+                    "client": "consensus",
+                    "working_dir": "/root/",
                 }
             )
 
@@ -364,9 +380,7 @@ class Command(BaseCommand):
             "tty": props["tty"],
             "working_dir": props["working_dir"],
             "command": [
-                # *settings.ETH_NODE[props["client"]]["entrypoint"][1:],
-                settings.ETH_NODE[props["client"]]["bin"],
-                " ".join(props["cmd"]),
+                " ".join([*settings.ETH_NODE[props["client"]]["bin"], *props["cmd"]])
             ],
             # inter-service communition
             "expose": [

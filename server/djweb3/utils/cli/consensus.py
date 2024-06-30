@@ -1,0 +1,102 @@
+import os
+from djweb3.utils.cli.common import touch
+from djweb3.utils.event import Logger
+from djweb3.utils.mapper import Mapper
+from djweb3.utils.models import SingletonAbstract
+
+
+class Consensus(SingletonAbstract):
+    def __init__(self, **kwargs) -> None:
+        self.path = kwargs["path"]
+        self.jwtsecret = kwargs["jwtsecret"]
+
+        try:
+            if not os.path.isdir(self.path()):
+                os.makedirs(self.path())
+                touch(self.path("secrets/jwt.hex"), self.jwtsecret)
+
+            Logger.info("init", "consensus", "success")
+        except Exception as e:
+            Logger.error("signer", e)
+
+    @classmethod
+    def parse_options(cls, options):
+        print("=============================>options", options)
+        try:
+            ports = []
+            cmd = [
+                ("--network", options["network"]),
+                ("--checkpoint-sync-url", options["checkpoint-sync-url"]),
+                (
+                    "--allow-insecure-genesis-sync",
+                    options["allow-insecure-genesis-sync"],
+                ),
+                ("--http", "http" in options["api"]),
+                ("--execution-endpoint", options["execution-endpoint"]),
+                ("--execution-jwt", "/secrets/jwt.hex"),
+            ]
+            # Conditional
+            required = {"http": options["api"]["http"]}
+            if required["http"]:
+                ports.extend(
+                    [
+                        (
+                            "--http-port",
+                            options["api"]["http"].get("port", "5052"),
+                        ),
+                    ]
+                )
+                cmd.extend(
+                    [
+                        (
+                            "--http-address",
+                            options["api"]["http"].get("address", "localhost"),
+                        ),
+                        (
+                            "--http-allow-origin",
+                            options["api"]["http"].get("allow-origin", "'*'"),
+                        ),
+                    ]
+                )
+                if required["http"]["enable-tls"]:
+                    cmd.extend(
+                        [
+                            (
+                                "--http-enable-tls",
+                                options["api"]["http"].get("enable-tls", False),
+                            ),
+                            (
+                                "--http-tls-cert",
+                                options["api"]["http"].get("tls-cert"),
+                            ),
+                            (
+                                "--http-tls-key",
+                                options["api"]["http"].get("tls-key"),
+                            ),
+                        ]
+                    )
+            mapping = Mapper.client_options(ports=ports, cmd=cmd)
+            return {
+                "tty": options["tty"],
+                "ports": mapping["ports"],
+                "cmd": [" ".join(mapping["cmd"])],
+            }
+        except Exception as e:
+            Logger.error("consensus config", e)
+
+    @classmethod
+    def volumes(cls, path):
+        return [
+            {
+                "type": "bind",
+                "source": path("secrets/jwt.hex"),
+                "target": "/secrets/jwt.hex",
+                # ensure integrity
+                "read_only": True,
+            },
+            {
+                "type": "bind",
+                "source": path(),
+                "target": "/root/",
+            },
+        ]
