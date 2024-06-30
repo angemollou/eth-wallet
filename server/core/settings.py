@@ -201,13 +201,12 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
-    "base_dir": BASE_DIR.joinpath(".ethnode"),
-    "wait_throttle_time": 2,  # secs
     "output": {
-        "docker": {
-            "json": BASE_DIR.joinpath("./docker-compose.json"),
-            "yaml": BASE_DIR.joinpath("./docker-compose.yml"),
-        }
+        "container": BASE_DIR.joinpath(".ethnode"),
+        "compose": {
+            "json": str(BASE_DIR.joinpath("./docker-compose.json")),
+            "yaml": str(BASE_DIR.joinpath("./docker-compose.yml")),
+        },
     },
     "execution": {
         "image": "ethereum/client-go:latest",
@@ -244,7 +243,7 @@ ETH_NODE = {
     "signer": {
         "image": "ethereum/client-go:alltools-latest",
         "entrypoint": ["sh", "-c"],
-        "bin": "clef",
+        "bin": "echo ok | clef",
         "name": "ethnode-signer",
         "api": {
             "ipc": {

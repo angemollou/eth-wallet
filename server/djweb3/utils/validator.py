@@ -7,6 +7,9 @@ class Validator:
 
     @classmethod
     def password(cls, password):
+        if password is None:
+            return False
+
         min_length = next(
             filter(
                 lambda module: module["NAME"]
@@ -14,9 +17,9 @@ class Validator:
                 settings.AUTH_PASSWORD_VALIDATORS,
             )
         )["OPTIONS"]["min_length"]
-        validator = MinimumLengthValidator(min_length)
+        MinimumLengthValidator(min_length).validate(password=password)
 
-        return validator.validate(password=password)
+        return True
 
     @classmethod
     def container_name(cls, name: str):

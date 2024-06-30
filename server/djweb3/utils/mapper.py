@@ -57,13 +57,12 @@ class Mapper:
         """
         key, value = s
         try:
-            int(value)
+            return {
+                "protocol": key.removeprefix("--").removesuffix(".port"),
+                "port": int(value),
+            }
         except ValueError:
             raise ValueError("%s=%s" % (key, value), "cannot be a port number")
-        return {
-            "protocol": key.removeprefix("--").removesuffix(".port"),
-            "port": value,
-        }
 
     @classmethod
     def cmd(cls, s: tuple[str, str]):

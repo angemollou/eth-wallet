@@ -1,25 +1,17 @@
 import functools
-import logging
 import json
 import hashlib
 import os
-import shutil
 from time import sleep
 import functools
 import subprocess
+import yaml
 
-TERMINAL_SIZE = shutil.get_terminal_size()
-LOG_SEPARATOR = "\n{}\n".format(
-    "-" * int(TERMINAL_SIZE[0] * 80 / 100)
-    if TERMINAL_SIZE[0] > 80
-    else TERMINAL_SIZE[0]
-)
-logging.basicConfig(format="[%(asctime)s]  %(name)s  %(message)s")
-LOGGER = logging.getLogger(__name__)
+from djweb3.utils.event import LOG_SEPARATOR, Logger
 
 
 def wait_fd(path, interval=2, log=False):
-    LOGGER.warning("WAIT  %s", path)
+    Logger.info("WAIT  %s", path)
     keys = []
     if os.path.isfile(path):
         keys = [path]
@@ -30,7 +22,7 @@ def wait_fd(path, interval=2, log=False):
         wait_fd(path)
         return False
     if log:
-        LOGGER.warning("WAIT LOG  %s%s\n", keys[-1], LOG_SEPARATOR)
+        Logger.info("WAIT LOG  %s%s\n", keys[-1], LOG_SEPARATOR)
     return keys[-1]
 
 
@@ -56,6 +48,11 @@ def load_json(path):
 def dump_json(data, path):
     with open(path, "w+") as fd:
         return json.dump(data, fd)
+
+
+def dump_yaml(data, path):
+    with open(path, "w+") as fd:
+        return fd.write(yaml.dump(data, default_flow_style=False))
 
 
 def sha256sum(text):
@@ -86,7 +83,7 @@ def on(condition):
 
 
 def cleanup_container(name, cwd=os.getcwd()):
-    LOGGER.warning("CLEANUP CONTAINER  %s", name)
+    Logger.info("CLEANUP CONTAINER  %s", name)
     try:
         found = (
             subprocess.run(
@@ -126,4 +123,4 @@ def cleanup_container(name, cwd=os.getcwd()):
                 stderr=subprocess.DEVNULL,
             )
     except Exception as e:
-        LOGGER.warning("CLEAN UP CONTAINER - Error not handled  %s", e)
+        Logger.info("CLEAN UP CONTAINER - Error not handled  %s", e)
