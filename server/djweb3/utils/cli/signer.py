@@ -198,9 +198,11 @@ class Signer(SingletonAbstract):
                     ]
                 )
 
+            mapping = Mapper.client_options(ports=ports, cmd=cmd)
             return {
                 "tty": options["tty"],
-                **Mapper.client_options(ports=ports, cmd=cmd),
+                "ports": mapping["ports"],
+                "cmd": [*mapping["cmd"], "<< EOF\nok\nEOF"],
             }
         except Exception as e:
             Logger.error("signer config", e)

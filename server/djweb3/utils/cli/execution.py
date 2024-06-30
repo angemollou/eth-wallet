@@ -1,5 +1,6 @@
 import os
 import shutil
+from djweb3.utils.cli.common import set_on
 from djweb3.utils.event import Logger
 from djweb3.utils.mapper import Mapper
 from djweb3.utils.models import SingletonAbstract
@@ -12,7 +13,6 @@ class Execution(SingletonAbstract):
         try:
             if not os.path.isdir(self.path()):
                 os.makedirs(self.path())
-                os.makedirs(self.path(".ethereum/geth/"))
 
             Logger.info("init", "execution", "success")
         except Exception as e:
@@ -27,6 +27,7 @@ class Execution(SingletonAbstract):
                 ("--authrpc.port", options["authrpc.port"]),
             ]
             cmd = [
+                # ("--sepolia", options["sepolia"]),
                 ("--networkid", options["chainid"]),
                 ("--authrpc.addr", options["authrpc.addr"]),
                 ("--authrpc.vhosts", options["authrpc.vhosts"]),
@@ -78,16 +79,6 @@ class Execution(SingletonAbstract):
             {
                 "type": "bind",
                 "source": path(),
-                "target": "/app/",
-            },
-            {
-                "type": "bind",
-                "source": path(".ethereum/geth/"),
-                "target": "/app/.ethereum/geth/",
-                "bind": {
-                    "selinux":
-                    # shared only with `signer`, related to `ipc` docker property
-                    "z"
-                },
+                "target": "/root/",
             },
         ]

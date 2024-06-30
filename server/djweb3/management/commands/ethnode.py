@@ -257,7 +257,7 @@ class Command(BaseCommand):
             path=Path.signer,
             env=settings.ETH_NODE["signer"],
             cmd={
-                "entrypoint": self.cmd["run"]["signer"],
+                "entrypoint": self.cmd["signer"]["run"],
                 "bin": settings.ETH_NODE["signer"]["bin"],
                 "cwd": Path.abs(),
             },
@@ -274,9 +274,9 @@ class Command(BaseCommand):
 
     def newaccount(self):
         if Validator.password(self.options["password"]):
-            self.signer_newaccount(self.options["password"], self.cmd["run"]["signer"])
+            self.signer_newaccount(self.options["password"], self.cmd["signer"]["run"])
 
-            self.signer_setpw(self.options["password"], self.cmd["run"]["signer"])
+            self.signer_setpw(self.options["password"], self.cmd["signer"]["run"])
 
     def compose(self, selected=[]):
         fragment = {}
@@ -325,6 +325,7 @@ class Command(BaseCommand):
                         Execution.parse_options(
                             {
                                 "chainid": CHAIN_ID,
+                                # "sepolia": settings.DEBUG,
                                 "ipcdisable": settings.ETH_NODE["execution"]["api"][
                                     "ipc"
                                 ]["ipcdisable"],
@@ -390,27 +391,15 @@ class Command(BaseCommand):
             else settings.ETH_NODE["output"]["compose"]["json"]
         )
 
-        return {
-            "up": [
-                "docker-compose",
-                "-f",
-                filename,
-                "up",
-            ],
-            "down": [
-                "docker-compose",
-                "-f",
-                filename,
-                "down",
-            ],
-            "run": {
-                "signer": [
-                    "docker-compose",
-                    "-f",
-                    filename,
-                    "run",
-                    "--rm",
-                    "signer",
-                ]
-            },
+        result = {
+            service: {
+                "up": ["docker-compose", "-f", filename, "up", service],
+                "down": ["docker-compose", "-f", filename, "down", service],
+                "run": ["docker-compose", "-f", filename, "run", "--rm", service],
+            }
+            for service in ["signer", "execution", "consensus"]
         }
+        result["up"] = ["docker-compose", "-f", filename, "up"]
+        result["down"] = ["docker-compose", "-f", filename, "down"]
+
+        return result
