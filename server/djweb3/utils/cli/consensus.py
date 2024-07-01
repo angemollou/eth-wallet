@@ -8,20 +8,17 @@ from djweb3.utils.models import SingletonAbstract
 class Consensus(SingletonAbstract):
     def __init__(self, **kwargs) -> None:
         self.path = kwargs["path"]
-        self.jwtsecret = kwargs["jwtsecret"]
 
         try:
             if not os.path.isdir(self.path()):
                 os.makedirs(self.path())
-                touch(self.path("secrets/jwt.hex"), self.jwtsecret)
 
             Logger.info("init", "consensus", "success")
         except Exception as e:
             Logger.error("signer", e)
 
     @classmethod
-    def parse_options(cls, options):
-        print("=============================>options", options)
+    def parse_options(cls, env, options):
         try:
             ports = []
             cmd = [
@@ -33,7 +30,8 @@ class Consensus(SingletonAbstract):
                 ),
                 ("--http", "http" in options["api"]),
                 ("--execution-endpoint", options["execution-endpoint"]),
-                ("--execution-jwt", "/secrets/jwt.hex"),
+                # ("--execution-jwt", "/tmp/jwtsecret"),
+                ("--execution-jwt-secret-key", options["execution-jwt-secret-key"]),
             ]
             # Conditional
             required = {"http": options["api"]["http"]}
@@ -76,10 +74,19 @@ class Consensus(SingletonAbstract):
                         ]
                     )
             mapping = Mapper.client_options(ports=ports, cmd=cmd)
+
             return {
                 "tty": options["tty"],
-                "ports": mapping["ports"],
-                "cmd": [" ".join(mapping["cmd"])],
+                "ports": [
+                    *mapping["ports"],
+                    {"protocol": "tcp", "port": 9000},
+                    {"protocol": "udp", "port": 9000},
+                    {"protocol": "udp", "port": 9001},
+                ],
+                "cmd": [
+                    *env["bin"],
+                    *mapping["cmd"],
+                ],
             }
         except Exception as e:
             Logger.error("consensus config", e)
@@ -87,13 +94,13 @@ class Consensus(SingletonAbstract):
     @classmethod
     def volumes(cls, path):
         return [
-            {
-                "type": "bind",
-                "source": path("secrets/jwt.hex"),
-                "target": "/secrets/jwt.hex",
-                # ensure integrity
-                "read_only": True,
-            },
+            # {
+            #     "type": "bind",
+            #     "source": os.path.join(os.path.dirname(path()), "tmp/jwtsecret"),
+            #     "target": "/tmp/jwtsecret",
+            #     # ensure integrity
+            #     "read_only": True,
+            # },
             {
                 "type": "bind",
                 "source": path(),

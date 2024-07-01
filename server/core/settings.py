@@ -201,6 +201,16 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
+    "chain_id": {
+        "1": not DEBUG,  # Mainnet,
+        "11155111": DEBUG,  # Sepolia testnet
+        # "12345": DEBUG,  # Available/non-public yet
+    },
+    "network": {
+        "mainnet": not DEBUG,  # Mainnet,
+        "sepolia": DEBUG,  # Sepolia testnet
+    },
+    "restart-policy": "unless-stopped" if DEBUG else "on-failure",
     "output": {
         "container": BASE_DIR.joinpath(".ethnode"),
         "compose": {
@@ -213,7 +223,6 @@ ETH_NODE = {
         "entrypoint": ["sh", "-c"],
         "bin": ["lighthouse", "bn"],
         "name": "ethnode-consensus",
-        "network": "sepolia" if DEBUG else "mainnet",
         "api": {
             "http": {
                 "address": "0.0.0.0",
@@ -224,7 +233,7 @@ ETH_NODE = {
                 "tls-key": "key.pem",
             },
         },
-        "execution-endpoint": "http://ethnode-consensus:8551",
+        "execution-endpoint": "http://ethnode-execution:8551",
         # Refer to this list `https://eth-clients.github.io/checkpoint-sync-endpoints/`
         "checkpoint-sync-url": (
             "https://sepolia.beaconstate.info"
@@ -246,8 +255,8 @@ ETH_NODE = {
         },
         "api": {
             "ipc": {
-                "ipcpath": "/app/.ethereum/geth/geth.ipc",
-                "ipcdisable": False,
+                "ipcpath": "/root/.ethereum/geth/geth.ipc",
+                "ipcdisable": True,
             },
             "http": {
                 "addr": "0.0.0.0",
@@ -273,7 +282,7 @@ ETH_NODE = {
         "api": {
             "ipc": {
                 "ipcpath": "/app/clef/clef.ipc",
-                "ipcdisable": False,
+                "ipcdisable": True,
             },
             "http": {
                 "addr": "0.0.0.0",
@@ -283,11 +292,6 @@ ETH_NODE = {
         },
         "nousb": True,
         "lightkdf": True,
-        "chain_id": {
-            "1": not DEBUG,  # Mainnet,
-            # "11155111": DEBUG,  # Sepolia testnet
-            "12345": DEBUG,  # Available/non-public yet
-        },
         "master_password": "1234567890",  # > 10 characters
         "rules_js": """function OnSignerStartup() {
     return "Approve"

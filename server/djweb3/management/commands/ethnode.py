@@ -15,13 +15,16 @@ from djweb3.utils.cli.execution import Execution
 from djweb3.utils.validator import Validator
 from djweb3.utils.normalizer import Normalizer
 from djweb3.utils.path import Path
-import binascii
 
 Path = Path(str(settings.ETH_NODE["output"]["container"]))
 
 
-NETWORKS = settings.ETH_NODE["signer"]["chain_id"]
-CHAIN_ID = next(filter(lambda k: NETWORKS[k], NETWORKS))
+CHAIN_ID = next(
+    filter(lambda pair: pair[1] and pair[0], settings.ETH_NODE["chain_id"].items())
+)[0]
+NETWORK = next(
+    filter(lambda pair: pair[1] and pair[0], settings.ETH_NODE["network"].items())
+)[0]
 
 
 class Command(BaseCommand):
@@ -206,9 +209,9 @@ class Command(BaseCommand):
 
     options = dict()
     signer = None
-    jwtsecret = ""
     execution = None
     consensus = None
+    jwtsecret = None
 
     def handle(self, *args, **options):
         try:
@@ -242,7 +245,15 @@ class Command(BaseCommand):
         self.up()
 
     def generate(self):
-        compose_dict = self.compose(["signer", "execution", "consensus"])
+        # generate 64 digit hex string
+        self.jwtsecret = "0x%s" % os.urandom(32).hex()
+        compose_dict = self.compose(
+            [
+                "signer",
+                "execution",
+                # "consensus"
+            ]
+        )
         if self.options["generate.json"]:
             dump_json(
                 compose_dict,
@@ -265,15 +276,9 @@ class Command(BaseCommand):
                 "cwd": Path.abs(),
             },
         )
-        self.jwtsecret = binascii.hexlify(os.urandom(16)).hex()
-        self.execution = Execution(
-            path=Path.execution,
-            jwtsecret=self.jwtsecret,
-        )
-        self.consensus = Consensus(
-            path=Path.consensus,
-            jwtsecret=self.jwtsecret,
-        )
+        self.newaccount()
+        self.execution = Execution(path=Path.execution, jwtsecret=self.jwtsecret)
+        self.consensus = Consensus(path=Path.consensus, jwtsecret=self.jwtsecret)
 
     def up(self):
         subprocess.check_call(self.cmd["up"], cwd=Path.abs())
@@ -282,10 +287,29 @@ class Command(BaseCommand):
         subprocess.check_call(self.cmd["down"], cwd=Path.abs())
 
     def newaccount(self):
-        if Validator.password(self.options["password"]):
-            self.signer_newaccount(self.options["password"], self.cmd["signer"]["run"])
-
-            self.signer_setpw(self.options["password"], self.cmd["signer"]["run"])
+        try:
+            if Validator.password(self.options["password"]):
+                Signer.newaccount(
+                    self.options["password"],
+                    cmd={
+                        "entrypoint": self.cmd["signer"]["run"],
+                        "bin": settings.ETH_NODE["signer"]["bin"],
+                        "cwd": Path.abs(),
+                    },
+                )
+                Signer.setpw(
+                    self.options["password"],
+                    settings.ETH_NODE["signer"]["master_password"],
+                    path=Path.signer,
+                    cmd={
+                        "entrypoint": self.cmd["signer"]["run"],
+                        "bin": settings.ETH_NODE["signer"]["bin"],
+                        "cwd": Path.abs(),
+                    },
+                )
+            Logger.info("init", "newaccount", "success")
+        except Exception as e:
+            Logger.error("newaccount", e)
 
     def compose(self, selected=[]):
         fragment = {}
@@ -294,11 +318,12 @@ class Command(BaseCommand):
                 {
                     **Mapper.service(
                         Signer.parse_options(
+                            settings.ETH_NODE["signer"],
                             {
                                 "chainid": CHAIN_ID,
                                 "tty": self.options["tty"],
                                 **settings.ETH_NODE["signer"],
-                            }
+                            },
                         )
                     ),
                     "volumes": Signer.volumes(Path.signer),
@@ -313,9 +338,9 @@ class Command(BaseCommand):
                 {
                     **Mapper.service(
                         Execution.parse_options(
+                            settings.ETH_NODE["execution"],
                             {
-                                "chainid": CHAIN_ID,
-                                # "sepolia": settings.DEBUG,
+                                "network": NETWORK,
                                 "ipcdisable": settings.ETH_NODE["execution"]["api"][
                                     "ipc"
                                 ]["ipcdisable"],
@@ -323,7 +348,7 @@ class Command(BaseCommand):
                                     "ipcpath"
                                 ],
                                 **self.options,
-                            }
+                            },
                         )
                     ),
                     "volumes": Execution.volumes(Path.execution),
@@ -338,9 +363,10 @@ class Command(BaseCommand):
                 {
                     **Mapper.service(
                         Consensus.parse_options(
+                            settings.ETH_NODE["consensus"],
                             {
                                 "tty": self.options["tty"],
-                                "network": settings.ETH_NODE["consensus"]["network"],
+                                "network": NETWORK,
                                 "checkpoint-sync-url": settings.ETH_NODE["consensus"][
                                     "checkpoint-sync-url"
                                 ],
@@ -351,7 +377,8 @@ class Command(BaseCommand):
                                     "execution-endpoint"
                                 ],
                                 "api": settings.ETH_NODE["consensus"]["api"],
-                            }
+                                "execution-jwt-secret-key": self.jwtsecret,
+                            },
                         )
                     ),
                     "volumes": Consensus.volumes(Path.consensus),
@@ -370,7 +397,8 @@ class Command(BaseCommand):
     def compose_service(self, props):
         return {
             "depends_on": props["depends_on"],
-            "container_name": Normalizer.label(
+            "container_name": props["client"],
+            "hostname": Normalizer.label(
                 "{service}".format(
                     service=props["container_name"],
                 ),
@@ -379,9 +407,7 @@ class Command(BaseCommand):
             "entrypoint": " ".join(settings.ETH_NODE[props["client"]]["entrypoint"]),
             "tty": props["tty"],
             "working_dir": props["working_dir"],
-            "command": [
-                " ".join([*settings.ETH_NODE[props["client"]]["bin"], *props["cmd"]])
-            ],
+            "command": [" ".join(props["cmd"])],
             # inter-service communition
             "expose": [
                 "%s/%s"
@@ -394,6 +420,7 @@ class Command(BaseCommand):
             # host machine - container communication
             "ports": props["ports"],
             "volumes": props["volumes"],
+            "restart": settings.ETH_NODE["restart-policy"],
         }
 
     @property

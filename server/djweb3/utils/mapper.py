@@ -34,7 +34,7 @@ class Mapper:
                     # only with the host's loopback network interface
                     "host_ip": "127.0.0.1",
                     # specific to the client, defaults to `tcp`, from docker spec
-                    "protocol": "tcp",
+                    "protocol": s.get("protocol", "tcp"),
                     # port will not be load balanced
                     "mode": "host",
                 }
@@ -58,7 +58,7 @@ class Mapper:
         key, value = s
         try:
             return {
-                "protocol": key.removeprefix("--").removesuffix(
+                "app_protocol": key.removeprefix("--").removesuffix(
                     ".port" if "." in key else "-port"
                 ),
                 "port": int(value),

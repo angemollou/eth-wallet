@@ -1,0 +1,111 @@
+name: djweb3_management_commands_ethnode
+services:
+  consensus:
+    image: gcr.io/prysmaticlabs/prysm/beacon-chain
+    container_name: consensus
+    hostname: ethnode-consensus
+    command: |
+      --datadir=/data --execution-endpoint=http://ethnode-execution:8551
+      --sepolia --jwt-secret=/tmp/jwtsecret
+      --checkpoint-sync-url=https://sepolia.beaconstate.info
+      --genesis-beacon-api-url=https://sepolia.beaconstate.info <<EOF
+      accept
+      EOF
+    volumes:
+      - ./.ethnode/tmp/jwtsecret:/tmp/jwtsecret
+      - ./.ethnode/consensus:/data
+    ports:
+      - 4000:4000
+      - 13000:13000
+      - 12000:12000/udp
+    depends_on:
+      - execution
+    restart: unless-stopped
+  execution:
+    command:
+      - geth --http.port 8545 --ws.port 3334 --authrpc.port 8551 --authrpc.addr 0.0.0.0
+        --authrpc.vhosts '*' --authrpc.jwtsecret /tmp/jwtsecret --signer http://ethnode-signer:8550
+        --ipcdisable --http --ws --sepolia --http.addr 0.0.0.0 --http.api eth,net,web3 --http.vhosts='*'
+        --ws.addr 0.0.0.0 --ws.api eth,net,web3 --ws.origins '*'
+    container_name: execution
+    depends_on:
+      - signer
+    entrypoint: sh -c
+    expose:
+      - 8545/tcp
+      - 3334/tcp
+      - 8551/tcp
+    hostname: ethnode-execution
+    image: ethereum/client-go:latest
+    ports:
+      - host_ip: 127.0.0.1
+        mode: host
+        protocol: tcp
+        published: 8545
+        target: 8545
+      - host_ip: 127.0.0.1
+        mode: host
+        protocol: tcp
+        published: 3334
+        target: 3334
+      - host_ip: 127.0.0.1
+        mode: host
+        protocol: tcp
+        published: 8551
+        target: 8551
+    restart: unless-stopped
+    tty: false
+    volumes:
+      - read_only: true
+        source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/tmp/jwtsecret
+        target: /tmp/jwtsecret
+        type: bind
+      - source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/execution
+        target: /root/
+        type: bind
+    working_dir: /root/
+  signer:
+    command:
+      - clef --http.port 8550 --configdir /app/data --keystore /app/data/keystore --chainid
+        11155111 --http --rules /app/config/rules.js --nousb --lightkdf --ipcdisable
+        --4bytedb-custom /app/config/4byte.json --pcscdpath '' --auditlog '' --loglevel
+        3 --http.addr 0.0.0.0 --http.vhosts '*' < /tmp/stdin | tee /tmp/stdout
+    container_name: signer
+    depends_on: []
+    entrypoint: sh -c
+    expose:
+      - 8550/tcp
+    hostname: ethnode-signer
+    image: ethereum/client-go:alltools-latest
+    ports:
+      - host_ip: 127.0.0.1
+        mode: host
+        protocol: tcp
+        published: 8550
+        target: 8550
+    restart: unless-stopped
+    tty: false
+    volumes:
+      - read_only: true
+        source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/config/rules.js
+        target: /app/config/rules.js
+        type: bind
+      - read_only: true
+        source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/config/4byte.json
+        target: /app/config/4byte.json
+        type: bind
+      - source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/data
+        target: /app/data/
+        type: bind
+      - source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/tmp/stdin
+        target: /tmp/stdin
+        type: bind
+      - source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/tmp/stdout
+        target: /tmp/stdout
+        type: bind
+      - bind:
+          selinux: z
+        source: /Users/angem/Documents/assessment/verifiednetwork-lab/server/.ethnode/signer/clef/
+        target: /app/clef/
+        type: bind
+    working_dir: /app

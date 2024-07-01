@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 
 from djweb3.utils.mapper import Mapper
@@ -27,6 +26,11 @@ class Signer(SingletonAbstract):
                     self.path("config/4byte.json"),
                     self.env["4bytedb"],
                 )
+                touch(
+                    self.path("tmp/stdin"),
+                    "ok\n%s\n" % self.env["master_password"],
+                )
+                touch(self.path("tmp/stdout"))
                 os.makedirs(self.path("clef"))
 
             self.seed()
@@ -84,15 +88,17 @@ class Signer(SingletonAbstract):
             )
             return True
 
-    def newaccount(self, user_pwd):
+    @classmethod
+    def newaccount(cls, *args, **kwargs):
         # Create account and Generate keystore (with the account password)
+        user_pwd = args[0]
         if Validator.password(user_pwd):
             subprocess.check_call(
                 [
-                    *self.cmd["entrypoint"],
+                    *kwargs["cmd"]["entrypoint"],
                     " ".join(
                         [
-                            *self.cmd["bin"],
+                            *kwargs["cmd"]["bin"],
                             "--keystore",
                             "/app/data/keystore",
                             "--stdio-ui",
@@ -103,45 +109,49 @@ class Signer(SingletonAbstract):
                         ]
                     ),
                 ],
-                cwd=self.cmd["cwd"],
+                cwd=kwargs["cmd"]["cwd"],
             )
             return True
 
-    # SUDO: use master password
-    def setpw(self, user_pwd):
+    @classmethod
+    def setpw(cls, *args, **kwargs):
         # Store a credential for the generated keystore file
+        user_pwd, master_pwd = args
+        latest_wallet_address_eth = cls.get_wallet_address_eth(kwargs["path"])[-1]
         if Validator.password(user_pwd):
             subprocess.check_call(
                 [
-                    *self.cmd["entrypoint"],
+                    *kwargs["cmd"]["entrypoint"],
                     " ".join(
                         [
-                            *self.cmd["bin"],
+                            *kwargs["cmd"]["bin"],
                             "--configdir",
                             "/app/data",
                             "--keystore",
                             "/app/data/keystore",
                             "--stdio-ui",
                             "setpw",
-                            "0x%s" % self.wallet_address_eth,
+                            "0x%s" % latest_wallet_address_eth,
                             ">/dev/null 2>&1 << EOF\n%sEOF"
                             % ("{user}\n{user}\n{master}\n").format(
                                 user=user_pwd,
-                                master=self.env["master_password"],
+                                master=master_pwd,
                             ),
                         ]
                     ),
                 ],
-                cwd=self.cmd["cwd"],
+                cwd=kwargs["cmd"]["cwd"],
             )
+            return latest_wallet_address_eth
 
-            return self.wallet_address_eth
-
-    @property
-    def wallet_address_eth(self):
+    @classmethod
+    def get_wallet_address_eth(cls, path):
         try:
-            basename = os.listdir(self.path("data/keystore"))[-1]
-            return load_json(self.path("data/keystore", basename))["address"]
+            found = os.listdir(path("data/keystore"))
+            return [
+                load_json(path("data/keystore", basename))["address"]
+                for basename in found
+            ]
         except (IndexError, KeyError) as e:
             Logger.error("account not found  %s", e)
 
@@ -154,12 +164,17 @@ class Signer(SingletonAbstract):
             Logger.error("account not found - attest rulesets  %s", e)
 
     @classmethod
-    def parse_options(cls, options):
+    def parse_options(cls, env, options):
         try:
             # Mandatory
             ports = []
             cmd = [
+                # ("--stdio-ui", True),
+                ("--configdir", "/app/data"),
+                ("--keystore", "/app/data/keystore"),
                 ("--chainid", options["chainid"]),
+                ("--http", "http" in options["api"]),
+                ("--rules", "/app/config/rules.js"),
                 ("--nousb", "nousb" in options),
                 ("--lightkdf", "lightkdf" in options),
                 (
@@ -170,8 +185,10 @@ class Signer(SingletonAbstract):
                         options["api"]["ipc"]["ipcpath"] or "/app/clef/clef.ipc",
                     )
                 ),
-                # ("--pcscdpath", "/run/pcscd/pcscd.comm") # $GETH_PCSCDPATH,
-                ("--http", "http" in options["api"]),
+                ("--4bytedb-custom", "/app/config/4byte.json"),
+                ("--pcscdpath", "''"),
+                ("--auditlog", "''"),
+                ("--loglevel", "3"),
             ]
 
             # Conditional
@@ -202,7 +219,11 @@ class Signer(SingletonAbstract):
             return {
                 "tty": options["tty"],
                 "ports": mapping["ports"],
-                "cmd": [*mapping["cmd"], "<<EOF\nok\nEOF"],
+                "cmd": [
+                    *env["bin"],
+                    *mapping["cmd"],
+                    "< /tmp/stdin | tee /tmp/stdout",
+                ],
             }
         except Exception as e:
             Logger.error("signer config", e)
@@ -230,25 +251,14 @@ class Signer(SingletonAbstract):
                 "target": "/app/data/",
             },
             {
-                "type": "tmpfs",
-                # "source": path("tmp/stdin"),
+                "type": "bind",
+                "source": path("tmp/stdin"),
                 "target": "/tmp/stdin",
-                "read_only": True,
-                "tmpfs": {
-                    "size": "1gb",
-                    # restricted deletion, owner readable
-                    "mode": 1400,
-                },
             },
             {
-                "type": "tmpfs",
-                # "source": path("tmp/stdout"),
+                "type": "bind",
+                "source": path("tmp/stdout"),
                 "target": "/tmp/stdout",
-                "tmpfs": {
-                    "size": "1gb",
-                    # restricted deletion, owner writable
-                    "mode": 1200,
-                },
             },
             {
                 "type": "bind",

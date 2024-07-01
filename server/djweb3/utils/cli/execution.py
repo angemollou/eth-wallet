@@ -13,14 +13,17 @@ class Execution(SingletonAbstract):
         try:
             if not os.path.isdir(self.path()):
                 os.makedirs(self.path())
-                touch(self.path(".ethereum/geth/jwtsecret"), self.jwtsecret)
+                touch(
+                    os.path.join(os.path.dirname(self.path()), "tmp/jwtsecret"),
+                    self.jwtsecret,
+                )
 
             Logger.info("init", "execution", "success")
         except Exception as e:
             Logger.error("signer", e)
 
     @classmethod
-    def parse_options(cls, options):
+    def parse_options(cls, env, options):
         try:
             ports = [
                 ("--http.port", options["http.port"]),
@@ -28,21 +31,21 @@ class Execution(SingletonAbstract):
                 ("--authrpc.port", options["authrpc.port"]),
             ]
             cmd = [
-                # ("--sepolia", options["sepolia"]),
-                ("--networkid", options["chainid"]),
                 ("--authrpc.addr", options["authrpc.addr"]),
                 ("--authrpc.vhosts", options["authrpc.vhosts"]),
+                ("--authrpc.jwtsecret", "/tmp/jwtsecret"),
                 ("--signer", options["signer"]),
                 (
                     ("--ipcdisable", True)
                     if options["ipcdisable"]
                     else (
                         "--ipcpath",
-                        options["ipcpath"] or "/app/.ethereum/geth/geth.ipc",
+                        options["ipcpath"] or "/root/.ethereum/geth/geth.ipc",
                     )
                 ),
                 ("--http", "http" in options),
                 ("--ws", "ws" in options),
+                ("--%s" % options["network"], True),
             ]
 
             # Conditional
@@ -67,9 +70,14 @@ class Execution(SingletonAbstract):
                     ]
                 )
 
+            mapping = Mapper.client_options(ports=ports, cmd=cmd)
             return {
                 "tty": options["tty"],
-                **Mapper.client_options(ports=ports, cmd=cmd),
+                "ports": mapping["ports"],
+                "cmd": [
+                    *env["bin"],
+                    *mapping["cmd"],
+                ],
             }
         except Exception as e:
             Logger.error("execution config", e)
@@ -79,8 +87,8 @@ class Execution(SingletonAbstract):
         return [
             {
                 "type": "bind",
-                "source": path(".ethereum/geth/jwtsecret"),
-                "target": "/root/.ethereum/geth/jwtsecret",
+                "source": os.path.join(os.path.dirname(path()), "tmp/jwtsecret"),
+                "target": "/tmp/jwtsecret",
                 # ensure integrity
                 "read_only": True,
             },
@@ -90,3 +98,9 @@ class Execution(SingletonAbstract):
                 "target": "/root/",
             },
         ]
+
+    @classmethod
+    def get_jwtsecret(cls, path):
+        filename = os.path.join(os.path.dirname(path()), "tmp/jwtsecret")
+        with open(filename, "r") as fd:
+            return fd.read()
