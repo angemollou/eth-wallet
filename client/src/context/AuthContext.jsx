@@ -13,7 +13,13 @@ export const AuthContext = createContext({
     setIsLoggedIn: () => { },
     subscriptions: [],
     setSubscriptions: () => { },
-    userList: [],
+    userList: {
+        page: [],
+        pagination: {
+            current: -1,
+            count: 0,
+        },
+    },
     setUserList: () => { },
 })
 

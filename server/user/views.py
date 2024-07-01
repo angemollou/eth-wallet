@@ -150,4 +150,12 @@ def users(request):
         return response.Response(status_code=404)
 
     serializer = serializers.UserSerializer(users, many=True)
-    return response.Response(serializer.data)
+    return response.Response(
+        {
+            "page": serializer.data,
+            "pagination": {
+                "current": num,
+                "count": generator.count,
+            },
+        }
+    )
