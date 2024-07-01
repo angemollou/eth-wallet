@@ -41,4 +41,5 @@ class EthNode(SingletonAbstract):
 
     @classmethod
     def get_balance(cls, address):
-        return cls.w3.eth.get_balance(address)
+        wei = cls.w3.eth.get_balance(address)
+        return cls.w3.from_wei(wei, "ether")
