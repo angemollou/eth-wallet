@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from dotenv import dotenv_values
 
+ENV = dotenv_values(".env")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -201,7 +203,7 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
-    "address": "http://127.0.0.1:8545",
+    "address": ENV.get("ETH_NODE_ENDPOINT", "http://127.0.0.1:8545"),
     "chain_id": {
         "1": not DEBUG,  # Mainnet,
         "11155111": DEBUG,  # Sepolia testnet
