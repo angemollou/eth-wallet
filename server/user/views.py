@@ -156,7 +156,7 @@ def users(request):
             "page": serializer.data,
             "pagination": {
                 "current": num,
-                "count": generator.count,
+                "count": generator.page_range.stop,
             },
         }
     )
