@@ -1,3 +1,4 @@
+import logging
 import os, sys, platform
 from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
@@ -27,7 +28,6 @@ class UserManager(BaseUserManager):
 
         user.first_name = kwargs.get("first_name")
         user.last_name = kwargs.get("last_name")
-        user.wallet_address_eth = kwargs.get("wallet_address_eth")
         user.is_admin = True
         user.is_staff = True
         user.is_superuser = True
@@ -57,6 +57,17 @@ class User(AbstractBaseUser):
             RegexValidator(
                 r"^0[xX][0-9a-fA-F]{40}$",
                 "The field must be a 42-character hexadecimal address",
+            )
+        ],
+    )
+    private_key_eth = models.CharField(
+        verbose_name="Ethereum wallet private key",
+        blank=True,
+        max_length=64,
+        validators=[
+            RegexValidator(
+                r"^0[xX][0-9a-fA-F]{64}$",
+                "The field must be a 64-character hexadecimal address",
             )
         ],
     )

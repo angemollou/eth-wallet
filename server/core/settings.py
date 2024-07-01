@@ -201,6 +201,7 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "user.User"
 
 ETH_NODE = {
+    "address": "http://127.0.0.1:8545",
     "chain_id": {
         "1": not DEBUG,  # Mainnet,
         "11155111": DEBUG,  # Sepolia testnet

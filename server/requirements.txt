@@ -11,3 +11,4 @@ Pillow==10.3.0
 setuptools==70.0.0
 requests==2.32.3
 pyyaml==6.0.1
+web3==6.20.0

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from djweb3.api import EthNode
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -9,10 +10,10 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = get_user_model()
-        fields = ("first_name", "last_name", "email", "password", "password2", "wallet_address_eth")
+        fields = ("first_name", "last_name", "email", "password", "password2")
         extra_kwargs = {
             "password": {"write_only": True},
-            "password2": {"write_only": True}
+            "password2": {"write_only": True},
         }
 
     def save(self):
@@ -20,17 +21,21 @@ class RegistrationSerializer(serializers.ModelSerializer):
             email=self.validated_data["email"],
             first_name=self.validated_data["first_name"],
             last_name=self.validated_data["last_name"],
-            wallet_address_eth=self.validated_data["wallet_address_eth"],
         )
 
         password = self.validated_data["password"]
         password2 = self.validated_data["password2"]
 
         if password != password2:
-            raise serializers.ValidationError(
-                {"password": "Passwords do not match!"})
+            raise serializers.ValidationError({"password": "Passwords do not match!"})
 
         user.set_password(password)
+
+        node = EthNode()
+        assert node.w3 is not None, "Failed to register account, Ethereum node availabe"
+        account_eth = node.create_account()
+        user.wallet_address_eth = account_eth.address
+        user.private_key_eth = node.w3.to_hex(account_eth.key)
         user.save()
 
         return user
@@ -38,11 +43,24 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    password = serializers.CharField(
-        style={"input_type": "password"}, write_only=True)
+    password = serializers.CharField(style={"input_type": "password"}, write_only=True)
 
 
 class UserSerializer(serializers.ModelSerializer):
+    balance_eth = serializers.SerializerMethodField("get_balance_eth")
+
+    def get_balance_eth(self, obj):
+        node = EthNode()
+        return node.get_balance(obj.wallet_address_eth)
+
     class Meta:
         model = get_user_model()
-        fields = ("id", "email", "is_staff", "first_name", "last_name", "wallet_address_eth")
+        fields = (
+            "id",
+            "email",
+            "is_staff",
+            "first_name",
+            "last_name",
+            "wallet_address_eth",
+            "balance_eth",
+        )

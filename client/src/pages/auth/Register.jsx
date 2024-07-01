@@ -10,7 +10,7 @@ export default function Register() {
     const email = useRef()
     const password = useRef()
     const password2 = useRef(undefined)
-    const wallet_address_eth = useRef()
+    // const wallet_address_eth = useRef()
 
 
     async function onSubmitForm(event) {
@@ -21,7 +21,7 @@ export default function Register() {
             email: email.current.value,
             password: password.current.value,
             password2: password2.current.value,
-            wallet_address_eth: wallet_address_eth.current.value
+            // wallet_address_eth: wallet_address_eth.current.value
         };
 
         setLoading(true)
@@ -51,12 +51,12 @@ export default function Register() {
                 <div className="mb-3">
                     <input type="email" placeholder='Email' autoComplete='off' className='form-control' id="email" ref={email} />
                 </div>
-                <div className="mb-3">
+                {/* <div className="mb-3">
                     <input type="wallet_address_eth" placeholder='Ethereum wallet address'
                         autoComplete='off' className='form-control'
                         id="wallet_address_eth" ref={wallet_address_eth}
                         pattern="^0[xX][0-9a-fA-F]{40}$" />
-                </div>
+                </div> */}
                 <div className="mb-3">
                     <input type="password" placeholder='Password' autoComplete='off' className='form-control' id="password" ref={password} />
                 </div>
