@@ -17,12 +17,12 @@ export default function Home() {
 
     return (
         <div className='container mt-3'>
-            <div className='row'>
-                <div className="mb-12">
-                    <h2>
-                        {user?.email !== undefined ? 'List user Ethereum balance' : 'Please login first'}
-                    </h2>
-                </div>
+            <div className="mb-12">
+                <h2>
+                    {user?.email !== undefined ? 'List user Ethereum balance' : 'Please login first'}
+                </h2>
+            </div>
+            {user && <div className='row'>
                 <table className="table table-sm">
                     <thead>
                         <tr>
@@ -35,7 +35,7 @@ export default function Home() {
                     <tbody>
                         {userList.page && userList.page.map((item, i) =>
                             <tr key={i}>
-                                <th scope="row">{i+1}</th>
+                                <th scope="row">{i + 1}</th>
                                 <td>{item?.first_name}</td>
                                 <td>{item?.last_name}</td>
                                 <td>{item?.balance_eth} ETH</td>
@@ -43,13 +43,13 @@ export default function Home() {
                         )}
                     </tbody>
                 </table>
-                <nav ariaLabel="Page navigation">
+                <nav aria-label="Page navigation">
                     <ul className="pagination justify-content-center">
                         <li className="page-item">
                             <button className="page-link text-dark"
                                 disabled={(page - 1) === 0}
-                                onClick={() => setPage(page - 1)} ariaLabel="Previous">
-                                <span ariaHidden="true">&laquo;</span>
+                                onClick={() => setPage(page - 1)} aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
                             </button>
                         </li>
                         {userList.pagination && userList.pagination.count
@@ -70,13 +70,13 @@ export default function Home() {
                         <li className="page-item">
                             {userList.pagination && <button className="page-link text-dark"
                                 disabled={(page + 1) > userList.pagination.count}
-                                onClick={() => setPage(page + 1)} ariaLabel="Next">
-                                <span ariaHidden="true">&raquo;</span>
+                                onClick={() => setPage(page + 1)} aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
                             </button>}
                         </li>
                     </ul>
                 </nav>
-            </div>
+            </div>}
         </div>
     )
 }

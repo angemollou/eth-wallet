@@ -65,7 +65,7 @@ export default function Register() {
                             <div class="custom-control custom-checkbox">
                                 <input type="checkbox" class="custom-control-input"
                                     id="is_new_wallet" onClick={onWalletBoxClick}
-                                    ariaLabel="Checkbox for following text input"
+                                    aria-label="Checkbox for following text input"
                                     defaultChecked={!isNewWallet} />
                             </div>
                         </div>
@@ -76,7 +76,7 @@ export default function Register() {
                             autoComplete='off' className='form-control'
                             id="wallet_address_eth" ref={wallet_address_eth}
                             pattern="^0[xX][0-9a-fA-F]{40}$"
-                            ariaLabel="Text input with checkbox" />
+                            aria-label="Text input with checkbox" />
                     }
                 </div>
                 <div className="mb-3">

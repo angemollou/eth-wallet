@@ -138,11 +138,12 @@ def user(request):
 
 
 @rest_decorators.api_view(["GET"])
-@rest_decorators.permission_classes([rest_permissions.IsAdminUser])
+@rest_decorators.permission_classes([rest_permissions.IsAuthenticated])
 def users(request):
     try:
         num = int(request.query_params["page"])
-        users = models.User.objects.all()
+        # Exclude Admin
+        users = models.User.objects.filter(id__gt=1)
         generator = Paginator(users, 5)
         if num <= generator.count:
             users = generator.page(num).object_list
