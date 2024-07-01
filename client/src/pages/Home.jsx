@@ -6,13 +6,15 @@ import { AuthContext } from '../context/AuthContext';
 export default function Home() {
     const { user } = useAuth();
     const { userList } = useContext(AuthContext);
-    const getUsers = useUserList()
+    const getUsers = useUserList();
     const [page, setPage] = useState(1);
+    const [isLoading, setLoading] = useState(true);
 
 
     useEffect(() => {
         getUsers(page)
-    }, [user, page])
+            .finally(() => setLoading(false));
+    }, [user, page]);
 
     return (
         <div className='container mt-3'>
@@ -22,24 +24,31 @@ export default function Home() {
                 </h2>
             </div>
             {user && <div className='row'>
-                <table className="table table-sm">
-                    <thead>
-                        <tr>
-                            <th scope="col">#</th>
-                            <th scope="col">Email</th>
-                            <th scope="col">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {userList.page && userList.page.map((item, i) =>
-                            <tr key={i}>
-                                <th scope="row">{i + 1}</th>
-                                <td>{item?.email}</td>
-                                <td>{item?.balance_eth} ETH</td>
+                {isLoading
+                    ? <div className='col d-flex justify-content-center align-items-center' style={{ height: '10rem' }}>
+                        <div class="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status">
+                            <span class="sr-only" />
+                        </div>
+                    </div>
+                    : <table className="table table-sm">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Balance</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {userList.page && userList.page.map((item, i) =>
+                                <tr key={i}>
+                                    <th scope="row">{i + 1}</th>
+                                    <td>{item?.email}</td>
+                                    <td>{item?.balance_eth} ETH</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                }
                 {userList.pagination && userList.pagination.count
                     && <nav aria-label="Page navigation">
                         <ul className="pagination justify-content-center">
