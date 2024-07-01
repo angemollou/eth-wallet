@@ -27,16 +27,11 @@ class EthNode(SingletonAbstract):
 
         account: LocalAccount = Account.from_key(private_key)
         cls.w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
-
-        logger.debug(f"Your hot wallet address is {account.address}")
         return account
 
     @classmethod
     def create_account(cls):
         account = cls.w3.eth.account.create()
-        logger.debug(
-            f"private key={cls.w3.to_hex(account.key)}, account={account.address}"
-        )
         return account
 
     @classmethod

@@ -1,17 +1,25 @@
 from django.contrib.auth import authenticate
 from django.conf import settings
 from django.middleware import csrf
-from rest_framework import exceptions as rest_exceptions, response, decorators as rest_decorators, permissions as rest_permissions
-from rest_framework_simplejwt import tokens, views as jwt_views, serializers as jwt_serializers, exceptions as jwt_exceptions
+from rest_framework import (
+    exceptions as rest_exceptions,
+    response,
+    decorators as rest_decorators,
+    permissions as rest_permissions,
+)
+from rest_framework_simplejwt import (
+    tokens,
+    views as jwt_views,
+    serializers as jwt_serializers,
+    exceptions as jwt_exceptions,
+)
 from user import serializers, models
+from django.core.paginator import Paginator
 
 
 def get_user_tokens(user):
     refresh = tokens.RefreshToken.for_user(user)
-    return {
-        "refresh_token": str(refresh),
-        "access_token": str(refresh.access_token)
-    }
+    return {"refresh_token": str(refresh), "access_token": str(refresh.access_token)}
 
 
 @rest_decorators.api_view(["POST"])
@@ -29,28 +37,27 @@ def loginView(request):
         tokens = get_user_tokens(user)
         res = response.Response()
         res.set_cookie(
-            key=settings.SIMPLE_JWT['AUTH_COOKIE'],
+            key=settings.SIMPLE_JWT["AUTH_COOKIE"],
             value=tokens["access_token"],
-            expires=settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'],
-            secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-            httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-            samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+            expires=settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"],
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            httponly=settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         )
 
         res.set_cookie(
-            key=settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'],
+            key=settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"],
             value=tokens["refresh_token"],
-            expires=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
-            secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-            httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-            samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+            expires=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"],
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            httponly=settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
         )
 
         res.data = tokens
         res["X-CSRFToken"] = csrf.get_token(request)
         return res
-    raise rest_exceptions.AuthenticationFailed(
-        "Email or Password is incorrect!")
+    raise rest_exceptions.AuthenticationFailed("Email or Password is incorrect!")
 
 
 @rest_decorators.api_view(["POST"])
@@ -66,22 +73,21 @@ def registerView(request):
     return rest_exceptions.AuthenticationFailed("Invalid credentials!")
 
 
-@rest_decorators.api_view(['POST'])
+@rest_decorators.api_view(["POST"])
 @rest_decorators.permission_classes([rest_permissions.IsAuthenticated])
 def logoutView(request):
     try:
-        refreshToken = request.COOKIES.get(
-            settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
+        refreshToken = request.COOKIES.get(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
         token = tokens.RefreshToken(refreshToken)
         token.blacklist()
 
         res = response.Response()
-        res.delete_cookie(settings.SIMPLE_JWT['AUTH_COOKIE'])
-        res.delete_cookie(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
+        res.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"])
+        res.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"])
         res.delete_cookie("X-CSRFToken")
         res.delete_cookie("csrftoken")
-        res["X-CSRFToken"]=None
-        
+        res["X-CSRFToken"] = None
+
         return res
     except:
         raise rest_exceptions.ParseError("Invalid token")
@@ -91,12 +97,13 @@ class CookieTokenRefreshSerializer(jwt_serializers.TokenRefreshSerializer):
     refresh = None
 
     def validate(self, attrs):
-        attrs['refresh'] = self.context['request'].COOKIES.get('refresh')
-        if attrs['refresh']:
+        attrs["refresh"] = self.context["request"].COOKIES.get("refresh")
+        if attrs["refresh"]:
             return super().validate(attrs)
         else:
             raise jwt_exceptions.InvalidToken(
-                'No valid token found in cookie \'refresh\'')
+                "No valid token found in cookie 'refresh'"
+            )
 
 
 class CookieTokenRefreshView(jwt_views.TokenRefreshView):
@@ -105,12 +112,12 @@ class CookieTokenRefreshView(jwt_views.TokenRefreshView):
     def finalize_response(self, request, response, *args, **kwargs):
         if response.data.get("refresh"):
             response.set_cookie(
-                key=settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'],
-                value=response.data['refresh'],
-                expires=settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
-                secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-                httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-                samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+                key=settings.SIMPLE_JWT["AUTH_COOKIE_REFRESH"],
+                value=response.data["refresh"],
+                expires=settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"],
+                secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+                httponly=settings.SIMPLE_JWT["AUTH_COOKIE_HTTP_ONLY"],
+                samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
             )
 
             del response.data["refresh"]
@@ -127,4 +134,20 @@ def user(request):
         return response.Response(status_code=404)
 
     serializer = serializers.UserSerializer(user)
+    return response.Response(serializer.data)
+
+
+@rest_decorators.api_view(["GET"])
+@rest_decorators.permission_classes([rest_permissions.IsAdminUser])
+def users(request):
+    try:
+        num = int(request.query_params["page"])
+        users = models.User.objects.all()
+        generator = Paginator(users, 5)
+        if num <= generator.count:
+            users = generator.page(num).object_list
+    except models.User.DoesNotExist:
+        return response.Response(status_code=404)
+
+    serializer = serializers.UserSerializer(users, many=True)
     return response.Response(serializer.data)

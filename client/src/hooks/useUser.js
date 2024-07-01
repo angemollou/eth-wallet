@@ -3,7 +3,7 @@ import useAxiosPrivate from "./usePrivate"
 
 export default function useUser() {
 
-    const { isLoggedIn, setUser, setIsLoggedIn } = useAuth()
+    const { isLoggedIn, setUser } = useAuth()
     const axiosPrivateInstance = useAxiosPrivate()
 
     async function getUser() {

@@ -64,6 +64,8 @@ class UserSerializer(serializers.ModelSerializer):
     balance_eth = serializers.SerializerMethodField("get_balance_eth")
 
     def get_balance_eth(self, obj):
+        if not obj.wallet_address_eth:
+            return None
         node = EthNode()
         return node.get_balance(obj.wallet_address_eth)
 
